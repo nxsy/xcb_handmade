@@ -27,10 +27,12 @@
 
 #include <sys/stat.h> // stat, fstat
 
+#include <dirent.h>    // DIR *, opendir
 #include <dlfcn.h>    // dlopen, dlsym, dlclose
+#include <errno.h>    // errno
 #include <fcntl.h>    // open, O_RDONLY
 #include <stdio.h>    // printf
-#include <stdlib.h>   // malloc, free
+#include <stdlib.h>   // malloc, calloc, free
 #include <string.h>   // strlen (I'm so lazy)
 #include <time.h>     // clock_gettime, CLOCK_MONOTONIC
 #include <unistd.h>   // readlink
@@ -43,8 +45,35 @@
 #include <X11/keysym.h>
 #include <X11/XF86keysym.h>
 
+#include <linux/joystick.h>
+
 #include "handmade.h"
 #include "xcb_handmade.h"
+
+internal real32
+hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)
+{
+    if (inverted)
+    {
+        value = -value;
+    }
+    if (abs(value) < dead_zone)
+    {
+        return 0;
+    }
+    else if (value < -dead_zone)
+    {
+        return (real32)((value + dead_zone) / (32767.0f - dead_zone));
+    }
+    return (real32)((value - dead_zone) / (32767.0f - dead_zone));
+}
+
+internal void
+hhxcb_process_button(bool down, game_button_state *old_state, game_button_state *new_state)
+{
+    new_state->EndedDown = down;
+    new_state->HalfTransitionCount = (old_state->EndedDown != new_state->EndedDown) ? 1 : 0;
+}
 
 xcb_format_t *hhxcb_find_format(hhxcb_context *context, uint32_t pad, uint32_t depth, uint32_t bpp)
 {
@@ -300,12 +329,107 @@ hhxcb_process_events(hhxcb_context *context, game_input *new_input, game_input *
     *new_keyboard_controller = {};
     new_keyboard_controller->IsConnected = true;
     for (
-            int button_index = 0;
+            uint button_index = 0;
             button_index < ArrayCount(new_keyboard_controller->Buttons);
             ++button_index)
     {
         new_keyboard_controller->Buttons[button_index].EndedDown =
             old_keyboard_controller->Buttons[button_index].EndedDown;
+    }
+
+    new_input->MouseX = old_input->MouseX;
+    new_input->MouseY = old_input->MouseY;
+
+    for (int i = 0; i < HHXCB_MAX_CONTROLLERS; ++i)
+    {
+        hhxcb_controller_info *pad = &context->controller_info[i];
+        if (!pad->is_active)
+        {
+            continue;
+        }
+        game_controller_input *old_controller = GetController(old_input, i+1);
+        game_controller_input *new_controller = GetController(new_input, i+1);
+
+        *new_controller = *old_controller;
+        new_controller->IsConnected = true;
+        new_controller->IsAnalog = old_controller->IsAnalog;
+
+        js_event j;
+        while (read(pad->fd, &j, sizeof(js_event)) == sizeof(js_event))
+        {
+            // Don't care if init or afterwards
+            j.type &= ~JS_EVENT_INIT;
+            if (j.type == JS_EVENT_BUTTON)
+            {
+                if (j.number == pad->a_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->ActionDown,
+                            &new_controller->ActionDown);
+                }
+                else
+                {
+                    printf("Unhandled button: number %d, value %d\n",
+                            j.number, j.value);
+                }
+            }
+            if (j.type == JS_EVENT_AXIS)
+            {
+                uint16 dead_zone = pad->axis_dead_zones[j.number];
+                bool axis_inverted = pad->axis_inverted[j.number];
+                if (j.number == pad->left_thumb_x_axis)
+                {
+                    new_controller->StickAverageX =
+                        hhxcb_process_controller_axis(j.value, dead_zone,
+                                axis_inverted);
+                    if (new_controller->StickAverageX != 0.0f)
+                    {
+                        new_controller->IsAnalog = true;
+                    }
+                }
+                else if (j.number == pad->left_thumb_y_axis)
+                {
+                    new_controller->StickAverageY =
+                        hhxcb_process_controller_axis(j.value, dead_zone,
+                                axis_inverted);
+                    if (new_controller->StickAverageY != 0.0f)
+                    {
+                        new_controller->IsAnalog = true;
+                    }
+                }
+                else if (j.number == pad->right_thumb_x_axis)
+                {
+                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                }
+                else if (j.number == pad->right_thumb_y_axis)
+                {
+                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                }
+                else if (j.number == pad->dpad_x_axis)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->MoveRight,
+                            &new_controller->MoveRight);
+                    hhxcb_process_button((j.value < 0),
+                            &old_controller->MoveLeft,
+                            &new_controller->MoveLeft);
+                    new_controller->IsAnalog = false;
+                }
+                else if (j.number == pad->dpad_y_axis)
+                {
+                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                }
+                else
+                {
+                    printf("Unhandled Axis: number %d, value %d\n",
+                        j.number, j.value);
+                }
+
+            }
+        }
+        if (errno != EAGAIN) {
+            context->need_controller_refresh = true;
+        }
     }
 
     xcb_generic_event_t *event;
@@ -398,8 +522,6 @@ hhxcb_process_events(hhxcb_context *context, game_input *new_input, game_input *
                         break;
                     }
                 }
-                printf("xcb_client_message received, type %u\n", client_message_event->type);
-                printf("data32[0] is %u\n", client_message_event->data.data32[0]);
                 break;
             }
             default:
@@ -410,6 +532,96 @@ hhxcb_process_events(hhxcb_context *context, game_input *new_input, game_input *
         }
         free(event);
     };
+}
+
+internal void
+hhxcb_refresh_controllers(hhxcb_context *context)
+{
+    // TODO(nbm): At the end of the function we should remove any controllers
+    // that remain with is_active=false, closing their fds, and so forth.
+    for(uint i = 0; i < ArrayCount(context->controller_info); i++)
+    {
+        context->controller_info[i].is_active = false;
+    }
+
+    DIR *dir = opendir("/dev/input");
+    dirent entry;
+    dirent *result;
+    while (!readdir_r(dir, &entry, &result) && result)
+    {
+        if ((entry.d_name[0] == 'j') && (entry.d_name[1] == 's'))
+        {
+            char full_device_path[HHXCB_STATE_FILE_NAME_LENGTH];
+            snprintf(full_device_path, sizeof(full_device_path), "%s/%s", "/dev/input", entry.d_name);
+            bool found = false;
+            for(uint i = 0; i < ArrayCount(context->controller_info); i++)
+            {
+                if (strcmp(context->controller_info[i].path, full_device_path) == 0)
+                {
+                    context->controller_info[i].is_active = true;
+                    found = true;
+                }
+            }
+            if (found) {
+                continue;
+            }
+
+            int fd = open(full_device_path, O_RDONLY);
+            if (fd < 0)
+            {
+                // TODO(nbm): log or something - permission may prevent open/read
+                continue;
+            }
+
+            char name[128];
+            ioctl(fd, JSIOCGNAME(128), name);
+            if (!strstr(name, "Microsoft X-Box 360 pad"))
+            {
+                // TODO(nbm): log or something
+                close(fd);
+                continue;
+            }
+
+            hhxcb_controller_info *use = 0;
+            for(uint i = 0; i < ArrayCount(context->controller_info); i++)
+            {
+                if (context->controller_info[i].fd <= 0)
+                {
+                    use = &context->controller_info[i];
+                    break;
+                }
+            }
+            if (!use) {
+                // TODO(nbm): log
+                close(fd);
+                continue;
+            }
+
+            // Does this ever matter?
+            int version;
+            ioctl(fd, JSIOCGVERSION, &version);
+            uint8 axes;
+            ioctl(fd, JSIOCGAXES, &axes);
+            uint8 buttons;
+            ioctl(fd, JSIOCGBUTTONS, &buttons);
+            printf("%s: %s, v%u, axes: %u, buttons: %u\n", entry.d_name, name, version, axes, buttons);
+
+            snprintf(use->path, sizeof(use->path), "%s/%s", "/dev/input", entry.d_name);
+            use->is_active = true;
+            use->fd = fd;
+            use->axis_dead_zones[0] = 7849;
+            use->axis_dead_zones[1] = 7849;
+            use->axis_inverted[1] = 1;
+            use->left_thumb_x_axis = 0;
+            use->left_thumb_y_axis = 1;
+            use->right_thumb_x_axis = 3;
+            use->right_thumb_y_axis = 4;
+            use->dpad_x_axis = 6;
+            use->dpad_y_axis = 7;
+            fcntl(fd, F_SETFL, O_NONBLOCK);
+        }
+    }
+    closedir(dir);
 }
 
 int
@@ -450,6 +662,11 @@ main()
     xcb_screen_t *screen = iter.data;
     context.fmt = hhxcb_find_format(&context, 32, 24, 32);
 
+    int monitor_refresh_hz = 60;
+    real32 game_update_hz = (monitor_refresh_hz / 2.0f); // Should almost always be an int...
+    long target_nanoseconds_per_frame = (1000 * 1000 * 1000) / game_update_hz;
+
+
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
     uint32_t values[2] =
     {
@@ -461,8 +678,8 @@ main()
             ,
     };
 
-#define START_WIDTH 1280
-#define START_HEIGHT 720
+#define START_WIDTH 960
+#define START_HEIGHT 540
 
     context.window = xcb_generate_id(context.connection);
     xcb_create_window(context.connection, XCB_COPY_FROM_PARENT, context.window,
@@ -503,28 +720,36 @@ main()
     m.PermanentStorageSize = Megabytes(64);
     m.TransientStorageSize = Megabytes(64);
     state.total_size = m.PermanentStorageSize + m.TransientStorageSize;
-    m.PermanentStorage = malloc(state.total_size);
+    m.PermanentStorage = calloc(state.total_size, sizeof(uint8));
     m.TransientStorage =
         (uint8_t *)m.PermanentStorage + m.TransientStorageSize;
     m.IsInitialized = 1;
 #ifdef HANDMADE_INTERNAL
     m.DEBUGPlatformFreeFileMemory = debug_xcb_free_file_memory;
-    m.DEBUGPlatformReadEntireFile;
-    m.DEBUGPlatformWriteEntireFile;
+    // m.DEBUGPlatformReadEntireFile;
+    // m.DEBUGPlatformWriteEntireFile;
 #endif
 
     bool ending = 0;
     timespec last_counter = {};
     timespec flip_wall_clock = {}; // Actually monotonic clock
-    clock_gettime(CLOCK_MONOTONIC, &last_counter);
-    clock_gettime(CLOCK_MONOTONIC, &flip_wall_clock);
+    clock_gettime(HHXCB_CLOCK, &last_counter);
+    clock_gettime(HHXCB_CLOCK, &flip_wall_clock);
 
     game_input input[2] = {};
     game_input *new_input = &input[0];
     game_input *old_input = &input[1];
 
+    int64_t next_controller_refresh = 0;
+
     while(!ending)
     {
+        if (last_counter.tv_sec >= next_controller_refresh)
+        {
+            hhxcb_refresh_controllers(&context);
+            next_controller_refresh = last_counter.tv_sec + 1;
+        }
+
         struct stat library_statbuf = {};
         stat(source_game_code_library_path, &library_statbuf);
         if (library_statbuf.st_mtime != game_code.library_mtime)
@@ -532,6 +757,8 @@ main()
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
         }
+
+        new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, new_input, old_input);
 
@@ -551,6 +778,63 @@ main()
 
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
+        xcb_flush(context.connection);
+
+        timespec target_counter = {};
+        target_counter.tv_sec = last_counter.tv_sec;
+        target_counter.tv_nsec = last_counter.tv_nsec + target_nanoseconds_per_frame;
+        if (target_counter.tv_nsec > (1000 * 1000 * 1000))
+        {
+            target_counter.tv_sec++;
+            target_counter.tv_nsec %= (1000 * 1000 * 1000);
+        }
+
+        timespec work_counter = {};
+        clock_gettime(HHXCB_CLOCK, &work_counter);
+
+        bool32 might_need_sleep = 0;
+        if (work_counter.tv_sec < target_counter.tv_sec)
+        {
+            might_need_sleep = 1;
+        }
+        else if ((work_counter.tv_sec == target_counter.tv_sec) && (work_counter.tv_nsec < target_counter.tv_nsec))
+        {
+            might_need_sleep = 1;
+        }
+        if (might_need_sleep) {
+            timespec sleep_counter = {};
+            sleep_counter.tv_nsec = target_counter.tv_nsec - work_counter.tv_nsec;
+            if (sleep_counter.tv_nsec < 0) {
+                sleep_counter.tv_nsec += (1000 * 1000 * 1000);
+            }
+            // To closest ms
+            sleep_counter.tv_nsec -= sleep_counter.tv_nsec % (1000 * 1000);
+            if (sleep_counter.tv_nsec > 0) {
+                timespec remaining_sleep_counter = {};
+                nanosleep(&sleep_counter, &remaining_sleep_counter);
+            }
+            else
+            {
+                // TODO(nbm): Log missed sleep
+            }
+        }
+
+        timespec spin_counter = {};
+        clock_gettime(HHXCB_CLOCK, &spin_counter);
+        while (spin_counter.tv_sec <= target_counter.tv_sec && spin_counter.tv_nsec < target_counter.tv_nsec) {
+            clock_gettime(HHXCB_CLOCK, &spin_counter);
+        }
+
+        timespec end_counter = {};
+        clock_gettime(HHXCB_CLOCK, &end_counter);
+
+        long ns_per_frame = end_counter.tv_nsec - last_counter.tv_nsec;
+        if (ns_per_frame < 0)
+        {
+            ns_per_frame += (1000 * 1000 * 1000) * (end_counter.tv_sec - last_counter.tv_sec);
+        }
+        last_counter = end_counter;
+        real32 ms_per_frame = ns_per_frame / (1000 * 1000.0);
 
         xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window,
                 buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width,

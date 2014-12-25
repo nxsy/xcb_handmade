@@ -26,6 +26,8 @@
  */
 
 #define HHXCB_STATE_FILE_NAME_LENGTH (1024)
+#define HHXCB_CLOCK CLOCK_MONOTONIC
+#define HHXCB_MAX_CONTROLLERS 4
 
 struct hhxcb_state {
     uint64_t total_size;
@@ -64,6 +66,22 @@ struct hhxcb_offscreen_buffer
     int bytes_per_pixel;
 };
 
+struct hhxcb_controller_info {
+    bool32 is_active;
+    char path[HHXCB_STATE_FILE_NAME_LENGTH]; // /dev/input filename of the controller
+    int fd;
+    int button_ioctl_to_use;
+    uint16 axis_dead_zones[ABS_MAX+1];
+    bool axis_inverted[ABS_MAX+1];
+    int left_thumb_x_axis;
+    int left_thumb_y_axis;
+    int right_thumb_x_axis;
+    int right_thumb_y_axis;
+    int dpad_x_axis;
+    int dpad_y_axis;
+    int a_button;
+};
+
 struct hhxcb_context
 {
     bool32 ending_flag;
@@ -79,4 +97,7 @@ struct hhxcb_context
 
     xcb_pixmap_t cursor_pixmap_id;
     xcb_cursor_t cursor_id;
+
+    bool32 need_controller_refresh;
+    hhxcb_controller_info controller_info[HHXCB_MAX_CONTROLLERS];
 };

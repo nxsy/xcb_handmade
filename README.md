@@ -59,13 +59,14 @@ Completed (at least partially) so far:
 * Keyboard input
 * Mouse input (x/y only)
 * Load and calling UpdateAndRender game code (and hot reloading)
+* Audio (with ALSA, not in a great state)
+* XBox360 controller support
+* Frame timing and locking
 
 Still needed:
 
-* Audio
-* Frame timing and locking
-* XBox360 controller support
 * Debug platform functions (read file, write file, free memory)
+* Save state, record, and replay.
 
 Licensing/Copyright/Author
 --------------------------

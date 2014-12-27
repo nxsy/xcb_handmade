@@ -27,7 +27,7 @@
 
 #include <sys/stat.h> // stat, fstat
 
-#include <dirent.h>    // DIR *, opendir
+#include <dirent.h>   // DIR *, opendir
 #include <dlfcn.h>    // dlopen, dlsym, dlclose
 #include <errno.h>    // errno
 #include <fcntl.h>    // open, O_RDONLY
@@ -46,6 +46,8 @@
 #include <X11/XF86keysym.h>
 
 #include <linux/joystick.h>
+
+#include <alsa/asoundlib.h>
 
 #include "handmade.h"
 #include "xcb_handmade.h"
@@ -624,6 +626,39 @@ hhxcb_refresh_controllers(hhxcb_context *context)
     closedir(dir);
 }
 
+internal
+void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
+{
+    // char *device = (char *)"default";
+    char *device = (char *)"hw:0,0";
+
+    int err;
+    snd_pcm_sframes_t frames;
+    err = snd_output_stdio_attach(&context->alsa_log, stderr, 0);
+
+    if ((err = snd_pcm_open(&context->handle, device, SND_PCM_STREAM_PLAYBACK, 0)) < 0)
+    {
+            printf("Playback open error: %s\n", snd_strerror(err));
+            exit(EXIT_FAILURE);
+    }
+
+    snd_pcm_hw_params_t *hwparams;
+    snd_pcm_hw_params_alloca(&hwparams);
+
+    snd_pcm_hw_params_any(context->handle, hwparams);
+    snd_pcm_hw_params_set_rate_resample(context->handle, hwparams, 0);
+    snd_pcm_hw_params_set_access(context->handle, hwparams, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(context->handle, hwparams, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_channels(context->handle, hwparams, 2);
+    snd_pcm_hw_params_set_rate(context->handle, hwparams, sound_output->samples_per_second, 0);
+    snd_pcm_hw_params_set_period_size(context->handle, hwparams, sound_output->samples_per_second / 60, 0);
+    sound_output->secondary_buffer_size = 48000 / 4;
+    snd_pcm_hw_params_set_buffer_size(context->handle, hwparams, sound_output->secondary_buffer_size);
+    snd_pcm_hw_params(context->handle, hwparams);
+    snd_pcm_dump(context->handle, context->alsa_log);
+}
+
+
 int
 main()
 {
@@ -656,7 +691,6 @@ main()
     }
 
     load_atoms(&context);
-
     context.setup = xcb_get_setup(context.connection);
     xcb_screen_iterator_t iter = xcb_setup_roots_iterator(context.setup);
     xcb_screen_t *screen = iter.data;
@@ -709,6 +743,14 @@ main()
     hhxcb_resize_backbuffer(&context, &buffer, START_WIDTH, START_HEIGHT);
 
     xcb_flush(context.connection);
+
+    hhxcb_sound_output sound_output = {};
+    sound_output.samples_per_second = 48000;
+    sound_output.bytes_per_sample = sizeof(int16) * 2;
+    sound_output.secondary_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
+    hhxcb_init_alsa(&context, &sound_output);
+
+    int16 *sample_buffer = (int16 *)malloc(sound_output.secondary_buffer_size);
 
     thread_context t = {};
 
@@ -775,6 +817,51 @@ main()
         game_buffer.BytesPerPixel = buffer.bytes_per_pixel;
 
         game_code.UpdateAndRender(&t, &m, new_input, &game_buffer);
+
+        game_sound_output_buffer sound_buffer;
+        sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
+        sound_buffer.SampleCount = sound_output.samples_per_second / 30;
+        sound_buffer.Samples = sample_buffer;
+
+        int err, frames;
+        snd_pcm_sframes_t delay, avail;
+        snd_pcm_avail_delay(context.handle, &avail, &delay);
+        if (avail == sound_output.secondary_buffer_size)
+        {
+            // NOTE(nbm): Full available buffer, starting with ~60ms of silence
+            bzero(sample_buffer, sound_buffer.SampleCount * sound_output.bytes_per_sample);
+            snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
+            snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
+            snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
+            snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
+        }
+        else
+        {
+            uint32 target_available_frames = sound_output.secondary_buffer_size;
+            target_available_frames -= (sound_buffer.SampleCount * 1);
+            if (avail - target_available_frames < sound_buffer.SampleCount)
+            {
+                sound_buffer.SampleCount += avail - target_available_frames;
+            }
+        }
+        game_code.GetSoundSamples(&t, &m, &sound_buffer);
+        if (sound_buffer.SampleCount > 0) {
+            frames = snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
+
+            if (frames < 0)
+            {
+                frames = snd_pcm_recover(context.handle, frames, 0);
+            }
+            if (frames < 0) {
+                printf("snd_pcm_writei failed: %s\n", snd_strerror(frames));
+                break;
+            }
+            if (frames > 0 && frames < sound_buffer.SampleCount)
+            {
+                printf("Short write (expected %i, wrote %i)\n", sound_buffer.SampleCount, frames);
+            }
+        }
+
 
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
@@ -845,6 +932,8 @@ main()
         new_input = old_input;
         old_input = temp_input;
     }
+
+    snd_pcm_close(context.handle);
 
     // NOTE(nbm): Since auto-repeat seems to be a X-wide thing, let's be nice
     // and return it to where it was before?

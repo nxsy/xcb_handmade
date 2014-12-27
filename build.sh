@@ -3,7 +3,7 @@
 set -e
 set -u
 
-XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms"
+XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lasound"
 CPPFLAGS="-DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 WARNFLAGS="-Wall -Wno-unused-variable"
 GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"

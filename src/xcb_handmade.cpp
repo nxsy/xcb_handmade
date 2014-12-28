@@ -511,6 +511,48 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
                             &old_controller->ActionDown,
                             &new_controller->ActionDown);
                 }
+                else if (j.number == pad->b_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->ActionRight,
+                            &new_controller->ActionRight);
+                }
+                else if (j.number == pad->x_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->ActionLeft,
+                            &new_controller->ActionLeft);
+                }
+                else if (j.number == pad->y_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->ActionUp,
+                            &new_controller->ActionUp);
+                }
+                else if (j.number == pad->l1_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->LeftShoulder,
+                            &new_controller->LeftShoulder);
+                }
+                else if (j.number == pad->r1_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->RightShoulder,
+                            &new_controller->RightShoulder);
+                }
+                else if (j.number == pad->back_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->Back,
+                            &new_controller->Back);
+                }
+                else if (j.number == pad->start_button)
+                {
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->Start,
+                            &new_controller->Start);
+                }
                 else
                 {
                     printf("Unhandled button: number %d, value %d\n",
@@ -561,7 +603,13 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
                 }
                 else if (j.number == pad->dpad_y_axis)
                 {
-                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                    hhxcb_process_button((j.value > 0),
+                            &old_controller->MoveDown,
+                            &new_controller->MoveDown);
+                    hhxcb_process_button((j.value < 0),
+                            &old_controller->MoveUp,
+                            &new_controller->MoveUp);
+                    new_controller->IsAnalog = false;
                 }
                 else
                 {
@@ -777,11 +825,18 @@ hhxcb_refresh_controllers(hhxcb_context *context)
             use->fd = fd;
             use->axis_dead_zones[0] = 7849;
             use->axis_dead_zones[1] = 7849;
-            use->axis_inverted[1] = 1;
             use->left_thumb_x_axis = 0;
             use->left_thumb_y_axis = 1;
             use->right_thumb_x_axis = 3;
             use->right_thumb_y_axis = 4;
+            use->a_button = 0;
+            use->b_button = 1;
+            use->x_button = 2;
+            use->y_button = 3;
+            use->l1_button = 4;
+            use->r1_button = 5;
+            use->back_button = 6;
+            use->start_button = 7;
             use->dpad_x_axis = 6;
             use->dpad_y_axis = 7;
             fcntl(fd, F_SETFL, O_NONBLOCK);

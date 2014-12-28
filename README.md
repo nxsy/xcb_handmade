@@ -82,9 +82,10 @@ Included is alternate.cpp, which is built the same way the Handmade Hero code
 is, but with a view to having something people can execute without the
 Handmade Hero source code.
 
-It currently displays colourful static, and plays background music from a .wav
-file.  This also helps verify the sound system is working now that there is no
-sound coming in from Handmade Hero since at least Day 28.
+It currently displays a black background with an interactive goblin (WASD, or
+XBox 360 gamepad), and plays background music from a .wav file.  This also
+helps verify the sound system is working now that there is no sound coming in
+from Handmade Hero since at least Day 28.
 
 
 Licensing/Copyright/Author

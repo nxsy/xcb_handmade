@@ -90,6 +90,13 @@ struct hhxcb_controller_info {
     int dpad_x_axis;
     int dpad_y_axis;
     int a_button;
+    int b_button;
+    int x_button;
+    int y_button;
+    int l1_button;
+    int r1_button;
+    int back_button;
+    int start_button;
 };
 
 struct hhxcb_context

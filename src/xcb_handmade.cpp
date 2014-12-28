@@ -50,8 +50,33 @@
 
 #include <alsa/asoundlib.h>
 
-#include "handmade.h"
+#include "handmade_platform.h"
 #include "xcb_handmade.h"
+
+#define internal static
+#define local_persist static
+#define global_variable static
+#if HANDMADE_SLOW
+#define Assert(Expression) if(!(Expression)) {*(int *)0 = 0;}
+#else
+#define Assert(Expression)
+#endif
+#define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
+#ifndef GAME_CODE_FILENAME
+#define GAME_CODE_FILENAME libhandmade.so
+#endif
+#define _HHXCB_QUOTE2(X) #X
+#define _HHXCB_QUOTE(X) _HHXCB_QUOTE2(X)
+
+inline game_controller_input *
+GetController(game_input *input, uint8 index)
+{
+    Assert(index < ArrayCount(input->Controllers));
+
+    game_controller_input *result = &input->Controllers[index];
+    return result;
+}
 
 internal real32
 hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)
@@ -799,11 +824,13 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
 int
 main()
 {
+
     hhxcb_state state = {};
     hhxcb_get_binary_name(&state);
 
     char source_game_code_library_path[HHXCB_STATE_FILE_NAME_LENGTH];
-    hhxcb_build_full_filename(&state, (char *)"libhandmade.so",
+    char *game_code_filename = (char *) _HHXCB_QUOTE(GAME_CODE_FILENAME);
+    hhxcb_build_full_filename(&state, game_code_filename,
             sizeof(source_game_code_library_path),
             source_game_code_library_path);
     hhxcb_game_code game_code = {};
@@ -896,8 +923,8 @@ main()
 #endif
 
     game_memory m = {};
-    m.PermanentStorageSize = Megabytes(64);
-    m.TransientStorageSize = Megabytes(64);
+    m.PermanentStorageSize = 64 * 1024 * 1024;
+    m.TransientStorageSize = 64 * 1024 * 1024;
     state.total_size = m.PermanentStorageSize + m.TransientStorageSize;
     state.game_memory_block = calloc(state.total_size, sizeof(uint8));
     m.PermanentStorage = (uint8 *)state.game_memory_block;

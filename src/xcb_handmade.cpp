@@ -25,6 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/mman.h> // mmap, PROT_*, MAP_*
 #include <sys/stat.h> // stat, fstat
 
 #include <dirent.h>   // DIR *, opendir
@@ -314,6 +315,122 @@ hhxcb_unload_game(hhxcb_game_code *game_code)
 }
 
 internal void
+hhxcb_get_input_file_location(hhxcb_state *state, bool32 input_stream, uint index, int dest_size, char *dest)
+{
+    char temp[64];
+    sprintf(temp, "loop_edit_%d_%s.hmi", index, input_stream ? "input" : "state");
+    hhxcb_build_full_filename(state,
+            temp,
+            dest_size,
+            dest);
+}
+
+internal hhxcb_replay_buffer *
+hhxcb_get_replay_buffer(hhxcb_state *state, uint8 index)
+{
+    Assert(index < ArrayCount(state->replay_buffers));
+    hhxcb_replay_buffer *result = &state->replay_buffers[index];
+    return result;
+}
+
+internal void
+hhxcb_init_replays(hhxcb_state *state)
+{
+    for (uint8 index = 0;
+            index < ArrayCount(state->replay_buffers);
+            ++index)
+    {
+        hhxcb_replay_buffer *replay_buffer = &state->replay_buffers[index];
+
+        hhxcb_get_input_file_location(state, false, index,
+                sizeof(replay_buffer->filename), replay_buffer->filename);
+
+        replay_buffer->file_handle = open(replay_buffer->filename,
+                O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+        int truncate_succeeded = ftruncate(replay_buffer->file_handle, state->total_size);
+        if (truncate_succeeded == -1)
+        {
+            perror("ftruncate");
+        }
+
+        replay_buffer->memory_block = mmap(0, state->total_size,
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_POPULATE,
+                replay_buffer->file_handle, 0);
+
+        if (replay_buffer->memory_block == MAP_FAILED)
+        {
+            perror("mmap");
+        }
+    }
+}
+
+internal void
+hhxcb_start_recording(hhxcb_state *state, uint8 index)
+{
+    hhxcb_replay_buffer *replay_buffer = hhxcb_get_replay_buffer(state, index);
+    if (replay_buffer->memory_block)
+    {
+        state->recording_index = index;
+        char filename[HHXCB_STATE_FILE_NAME_LENGTH];
+        hhxcb_get_input_file_location(state, true, index, sizeof(filename), filename);
+        state->recording_fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+
+        memcpy(replay_buffer->memory_block, state->game_memory_block, state->total_size);
+    }
+}
+
+internal void
+hhxcb_stop_recording(hhxcb_state *state)
+{
+    close(state->recording_fd);
+    state->recording_index = 0;
+    state->recording_fd = 0;
+}
+
+internal void
+hhxcb_start_playback(hhxcb_state *state, uint8 index)
+{
+    hhxcb_replay_buffer *replay_buffer = hhxcb_get_replay_buffer(state, index);
+    if (replay_buffer->memory_block)
+    {
+        state->playback_index = index;
+        char filename[HHXCB_STATE_FILE_NAME_LENGTH];
+        hhxcb_get_input_file_location(state, true, index, sizeof(filename), filename);
+        state->playback_fd = open(filename, O_RDONLY);
+        memcpy(state->game_memory_block, replay_buffer->memory_block, state->total_size);
+    }
+}
+
+internal void
+hhxcb_stop_playback(hhxcb_state *state)
+{
+    close(state->playback_fd);
+    state->playback_index = 0;
+    state->playback_fd = 0;
+}
+
+internal void
+hhxcb_record_input(hhxcb_state *state, game_input *new_input)
+{
+    write(state->recording_fd, new_input, sizeof(*new_input));
+}
+
+internal void
+hhxcb_playback_input(hhxcb_state *state, game_input *new_input)
+{
+    int bytes_read = read(state->playback_fd, new_input, sizeof(*new_input));
+    if (bytes_read == 0)
+    {
+        uint8 index = state->playback_index;
+        hhxcb_stop_playback(state);
+        hhxcb_start_playback(state, index);
+        read(state->playback_fd, new_input, sizeof(*new_input));
+    }
+}
+
+
+internal void
 hhxcb_process_keyboard_message(game_button_state *new_state, bool32 is_down)
 {
     if (new_state->EndedDown != is_down)
@@ -324,7 +441,7 @@ hhxcb_process_keyboard_message(game_button_state *new_state, bool32 is_down)
 }
 
 internal void
-hhxcb_process_events(hhxcb_context *context, game_input *new_input, game_input *old_input)
+hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new_input, game_input *old_input)
 {
     game_controller_input *old_keyboard_controller = GetController(old_input, 0);
     game_controller_input *new_keyboard_controller = GetController(new_input, 0);
@@ -498,6 +615,28 @@ hhxcb_process_events(hhxcb_context *context, game_input *new_input, game_input *
                 {
                     hhxcb_process_keyboard_message(&new_keyboard_controller->Back, is_down);
                 }
+                else if (keysym == XK_l)
+                {
+                    if (is_down)
+                    {
+                        if (state->playback_index == 0)
+                        {
+                            if (state->recording_index == 0)
+                            {
+                                hhxcb_start_recording(state, 1);
+                            }
+                            else
+                            {
+                                hhxcb_stop_recording(state);
+                                hhxcb_start_playback(state, 1);
+                            }
+                        }
+                        else
+                        {
+                            hhxcb_stop_playback(state);
+                        }
+                    }
+                }
                 break;
             }
             case XCB_NO_EXPOSURE:
@@ -657,8 +796,6 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_hw_params(context->handle, hwparams);
     snd_pcm_dump(context->handle, context->alsa_log);
 }
-
-
 int
 main()
 {
@@ -762,15 +899,17 @@ main()
     m.PermanentStorageSize = Megabytes(64);
     m.TransientStorageSize = Megabytes(64);
     state.total_size = m.PermanentStorageSize + m.TransientStorageSize;
-    m.PermanentStorage = calloc(state.total_size, sizeof(uint8));
+    state.game_memory_block = calloc(state.total_size, sizeof(uint8));
+    m.PermanentStorage = (uint8 *)state.game_memory_block;
     m.TransientStorage =
         (uint8_t *)m.PermanentStorage + m.TransientStorageSize;
-    m.IsInitialized = 1;
 #ifdef HANDMADE_INTERNAL
     m.DEBUGPlatformFreeFileMemory = debug_xcb_free_file_memory;
     // m.DEBUGPlatformReadEntireFile;
     // m.DEBUGPlatformWriteEntireFile;
 #endif
+
+    hhxcb_init_replays(&state);
 
     bool ending = 0;
     timespec last_counter = {};
@@ -802,7 +941,7 @@ main()
 
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
-        hhxcb_process_events(&context, new_input, old_input);
+        hhxcb_process_events(&context, &state, new_input, old_input);
 
         if (context.ending_flag)
         {
@@ -815,6 +954,15 @@ main()
         game_buffer.Height = buffer.height;
         game_buffer.Pitch = buffer.pitch;
         game_buffer.BytesPerPixel = buffer.bytes_per_pixel;
+
+        if (state.recording_index)
+        {
+            hhxcb_record_input(&state, new_input);
+        }
+        if (state.playback_index)
+        {
+            hhxcb_playback_input(&state, new_input);
+        }
 
         game_code.UpdateAndRender(&t, &m, new_input, &game_buffer);
 

@@ -32,12 +32,14 @@ Symlink handmade.h and handmade.cpp into the src directory.
 
     ln -s /path/to/handmadehero/handmade.h src/
     ln -s /path/to/handmadehero/handmade.cpp src/
+    ln -s /path/to/handmadehero/handmade_platform.cpp src/
 
 I’m creating a hh/ directory and unzipping the Handmade Hero source (and a
 particular day) in there.  My symlinks look like this:
 
     lrwxrwxrwx 1 nbm nbm 27 Dec 21 10:32 src/handmade.cpp -> ../hh/025/code/handmade.cpp
     lrwxrwxrwx 1 nbm nbm 25 Dec 21 10:32 src/handmade.h -> ../hh/025/code/handmade.h
+    lrwxrwxrwx 1 nbm nbm 30 Dec 27 15:12 src/handmade_platform.h -> ../hh/code/handmade_platform.h
 
 Build!
 
@@ -62,11 +64,11 @@ Completed (at least partially) so far:
 * Audio (with ALSA, not in a great state)
 * XBox360 controller support
 * Frame timing and locking
+* Save state, record, and replay.
 
 Still needed:
 
 * Debug platform functions (read file, write file, free memory)
-* Save state, record, and replay.
 
 Licensing/Copyright/Author
 --------------------------

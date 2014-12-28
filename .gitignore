@@ -1,6 +1,7 @@
 /hh
 /src/handmade.h
 /src/handmade.cpp
+/src/handmade_platform.h
 /src/xcb_handmade.config
 /src/xcb_handmade.creator
 /src/xcb_handmade.creator.user

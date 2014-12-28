@@ -28,10 +28,20 @@
 #define HHXCB_STATE_FILE_NAME_LENGTH (1024)
 #define HHXCB_CLOCK CLOCK_MONOTONIC
 #define HHXCB_MAX_CONTROLLERS 4
+#define HHXCB_NUM_REPLAYS 4
+
+struct hhxcb_replay_buffer
+{
+    uint32 file_handle;
+    uint32 memory_map;
+    char filename[HHXCB_STATE_FILE_NAME_LENGTH];
+    void *memory_block;
+};
 
 struct hhxcb_state {
     uint64_t total_size;
     void *game_memory_block;
+    hhxcb_replay_buffer replay_buffers[HHXCB_NUM_REPLAYS];
 
     uint32_t recording_fd;
     uint32_t recording_index;

@@ -80,13 +80,7 @@ Alternate build
 
 Included is alternate.cpp, which is built the same way the Handmade Hero code
 is, but with a view to having something people can execute without the
-Handmade Hero source code.
-
-It currently displays a black background with an interactive goblin (WASD, or
-XBox 360 gamepad), and plays background music from a .wav file.  This also
-helps verify the sound system is working now that there is no sound coming in
-from Handmade Hero since at least Day 28.
-
+Handmade Hero source code (not yet ready, though).
 
 Licensing/Copyright/Author
 --------------------------
@@ -94,6 +88,11 @@ Licensing/Copyright/Author
 Casey Muratori is the author of Handmade Hero, and this code is built by
 observation of his Win32 layer.  That isn’t freely distributable.
 
-The xcb platform layer was written by Neil Blakey-Milner (and in future
-others?), and is freely distributable in isolation under the BSD license, as
-specified in the header of the relevant files.
+The files in data/ were created by others.  See data/README.md for copyright
+information, credits, and licensing information.
+
+The xcb platform layer and the alternate build in src/alternate/ was written by
+Neil Blakey-Milner (and in future others?), and is freely distributable in
+isolation under the BSD license, as specified in the header of the relevant
+files.
+

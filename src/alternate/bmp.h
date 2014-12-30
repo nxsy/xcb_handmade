@@ -21,5 +21,17 @@ struct __attribute__((__packed__)) bmp_info_header {
     uint32 biClrImportant;
 };
 
+struct bmp_data {
+    void *memory;
+    int fd;
+
+    uint8 bits_per_pixel;
+    uint32 width;
+    uint32 height;
+    bool32 top_to_bottom;
+
+    void *bmp_memory;
+};
+
 #define HHXCB_BMP_H
 #endif

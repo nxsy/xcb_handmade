@@ -2,6 +2,7 @@
 
 #include <sys/stat.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,8 @@
 #include "../alternate/wav.cpp"
 #include "../alternate/bmp.h"
 #include "../alternate/bmp.cpp"
+
+bool32 alternate_debug = 0;
 
 struct tileset
 {
@@ -24,7 +27,6 @@ struct tilemap
     int16 tile_number;
     uint8 inverted;
 };
-
 struct tilescene {
     tileset tiles;
     uint8 width;
@@ -35,15 +37,121 @@ struct tilescene {
     tilemap *over_maps;
 };
 
+struct game_location
+{
+    uint32 tile_x;
+    uint32 tile_y;
+
+    real32 x;
+    real32 y;
+};
+
+struct sprite_data
+{
+    bmp_data *bmp;
+    int bmp_x;
+    int bmp_y;
+    int bmp_width;
+    int bmp_height;
+    int bmp_offset_x;
+    int bmp_offset_y;
+    int flags;
+};
+
+struct game_object
+{
+    sprite_data *sprite;
+    game_location location;
+};
+
+#define BITSET(name, type, number) uint64 name##_bitset; type name[number];
+#define BITSET_ALLOCATE(object, name, type) (type *)bitset_allocate(object->name, &object->name##_bitset, sizeof(type))
+
+#define BMP_ALLOCATE(object) BITSET_ALLOCATE(object, bmps, bmp_data)
+#define GAME_OBJECT_ALLOCATE(object) BITSET_ALLOCATE(object, objects, game_object)
+#define SPRITE_ALLOCATE(object) BITSET_ALLOCATE(object, sprites, sprite_data)
+
 struct game_state
 {
     wav_data wav;
     bmp_data bmp;
     tilescene scene;
 
-    real32 bmp_x;
-    real32 bmp_y;
+    BITSET(bmps, bmp_data, 64)
+
+    BITSET(objects, game_object, 64)
+
+    BITSET(sprites, sprite_data, 64)
+
+    game_object *player;
+    game_object *player2;
 };
+
+void *
+bitset_allocate(void *data, uint64 *bitset, uint32 size)
+{
+    uint8 *databytes = (uint8 *)data;
+    int found = -1;
+    for (int i = 0;
+            i < 64;
+            ++i)
+    {
+        if ((*bitset & (uint64)pow(2, i)) == 0)
+        {
+            found = i;
+            break;
+        }
+    }
+    if (found < 0)
+    {
+        return 0;
+    }
+    *bitset |= (uint64)pow(2, found);
+    return (void *)(databytes + (found * size));
+}
+
+void
+iterate_bitset_array(void *data, uint64 bitset, uint32 size, void **next)
+{
+    uint8 *databytes = (uint8 *)data;
+    int8 offset = -1;
+
+    if (*next)
+    {
+        uint8 *nextbytes = (uint8 *)*next;
+        offset = (nextbytes - databytes) / size;
+    }
+
+    int8 next_offset = -1;
+    for (int i = offset + 1;
+            i < 64;
+            ++i)
+    {
+        if ((bitset & (uint64)pow(2, i)) != 0)
+        {
+            next_offset = i;
+            break;
+        }
+
+    }
+    if (next_offset < 0) {
+        *next = 0;
+    }
+    else
+    {
+        *next = (void *)(databytes + (next_offset * size));
+    }
+}
+
+void
+bitset_free(void *base, uint64 *bitset, uint32 size, void *to_free)
+{
+    uint8 *base_bytes = (uint8 *)base;
+    uint8 *to_free_bytes = (uint8 *)to_free;
+
+    uint offset = (to_free_bytes - base_bytes) / size;
+    *bitset &= ~((uint64)pow(2, offset));
+}
 
 #define DRAW_BMP_INVERTED 1
 
@@ -296,18 +404,6 @@ populate_scene(tilescene *scene)
     {
         over_map[j].tile_number = -1;
     }
-
-    set_tile(scene, scene->over_maps, 0, 4, 4, 175);
-    set_tile(scene, scene->under_maps, 1, 4, 5, 195);
-
-    set_tile(scene, scene->over_maps, 0, 5, 4, 175);
-    set_tile(scene, scene->under_maps, 1, 5, 5, 195);
-
-    set_tile(scene, scene->over_maps, 0, 3, 3, 175);
-    set_tile(scene, scene->under_maps, 1, 3, 4, 195);
-
-    set_tile(scene, scene->over_maps, 0, 3, 6, 175);
-    set_tile(scene, scene->under_maps, 1, 3, 7, 195);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -315,15 +411,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     game_state *state = (game_state *)Memory->PermanentStorage;
     if(!Memory->IsInitialized)
     {
+        printf("Initializing memory\n");
+        *state = {};
         state->wav = {};
-        state->bmp = {};
         state->scene = {};
+        state->objects_bitset = 0;
+        state->bmps_bitset = 0;
         char filename[1024];
         find_data_file((char *)"Loop-Menu.wav", sizeof(filename), filename);
         wav_open(filename, &state->wav);
-
-        find_data_file((char *)"goblinsword.bmp", sizeof(filename), filename);
-        bmp_open(filename, &state->bmp);
 
         find_data_file((char *)"KenneyRPGpack.bmp", sizeof(filename), filename);
         bmp_open(filename, &state->scene.tiles.bmp);
@@ -332,9 +428,94 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         Memory->IsInitialized = true;
 
-        state->bmp_x = 200;
-        state->bmp_y = 200;
+        {
+
+            bmp_data *b = BMP_ALLOCATE(state);
+            find_data_file((char *)"goblinsword.bmp", sizeof(filename), filename);
+            bmp_open(filename, b);
+
+            sprite_data *s = SPRITE_ALLOCATE(state);
+            s->bmp = b;
+            s->bmp_height = b->height;
+            s->bmp_width = b->width;
+
+            {
+                game_object *g = GAME_OBJECT_ALLOCATE(state);
+                g->sprite = s;
+                g->location.tile_x = 0;
+                g->location.tile_y = 0;
+                g->location.x = 250;
+                g->location.y = 250;
+                state->player = g;
+            }
+
+            {
+                game_object *g = GAME_OBJECT_ALLOCATE(state);
+                g->sprite = s;
+                g->location.tile_x = 0;
+                g->location.tile_y = 0;
+                g->location.x = 150;
+                g->location.y = 150;
+                state->player2 = g;
+            }
+        }
+
+        {
+            bmp_data *b = BMP_ALLOCATE(state);
+            find_data_file((char *)"KenneyRPGpack.bmp", sizeof(filename), filename);
+            bmp_open(filename, b);
+
+            sprite_data *s = SPRITE_ALLOCATE(state);
+
+            s->bmp = b;
+            s->bmp_height = 64;
+            s->bmp_width = 64;
+            s->bmp_x = (175 * 64) % b->width;
+            s->bmp_y = ((175 * 64) / b->width) * 64;
+            s->bmp_offset_x = 0;
+            s->bmp_offset_y = -64;
+
+            game_object *g = GAME_OBJECT_ALLOCATE(state);
+            g->sprite = s;
+            g->location.tile_x = 0;
+            g->location.tile_y = 0;
+            g->location.x = 128;
+            g->location.y = 128;
+
+            g = GAME_OBJECT_ALLOCATE(state);
+            g->sprite = s;
+            g->location.tile_x = 0;
+            g->location.tile_y = 0;
+            g->location.x = 192;
+            g->location.y = 192;
+
+            s = SPRITE_ALLOCATE(state);
+
+            s->bmp = b;
+            s->bmp_height = 64;
+            s->bmp_width = 64;
+            s->bmp_x = (195 * 64) % b->width;
+            s->bmp_y = ((195 * 64) / b->width) * 64;
+            s->bmp_offset_x = 0;
+            s->bmp_offset_y = 0;
+
+            g = GAME_OBJECT_ALLOCATE(state);
+            g->sprite = s;
+            g->location.tile_x = 0;
+            g->location.tile_y = 0;
+            g->location.x = 128;
+            g->location.y = 128;
+
+            g = GAME_OBJECT_ALLOCATE(state);
+            g->sprite = s;
+            g->location.tile_x = 0;
+            g->location.tile_y = 0;
+            g->location.x = 192;
+            g->location.y = 192;
+        }
     }
+
+    alternate_debug = 0;
 
     for(int index = 0;
         index < 5;
@@ -342,48 +523,159 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         real32 dPlayerX = 0.0f;
         real32 dPlayerY = 0.0f;
+        real32 dPlayer2X = 0.0f;
+        real32 dPlayer2Y = 0.0f;
 
         game_controller_input *Controller = &Input->Controllers[index];
 
-        if(Controller->IsAnalog)
-        {
+        //if(Controller->IsAnalog)
+        //{
             dPlayerX += Controller->StickAverageX;
             dPlayerY += Controller->StickAverageY;
+        //}
+        if(Controller->MoveUp.EndedDown)
+        {
+            dPlayer2Y = -1.0f;
         }
-        else {
-
-            if(Controller->MoveUp.EndedDown)
-            {
-                dPlayerY = -1.0f;
-            }
-            if(Controller->MoveDown.EndedDown)
-            {
-                dPlayerY = 1.0f;
-            }
-            if(Controller->MoveLeft.EndedDown)
-            {
-                dPlayerX = -1.0f;
-            }
-            if(Controller->MoveRight.EndedDown)
-            {
-                dPlayerX = 1.0f;
-            }
-            if(Controller->ActionDown.EndedDown)
-            {
-                populate_scene(&state->scene);
-            }
+        if(Controller->MoveDown.EndedDown)
+        {
+            dPlayer2Y = 1.0f;
+        }
+        if(Controller->MoveLeft.EndedDown)
+        {
+            dPlayer2X = -1.0f;
+        }
+        if(Controller->MoveRight.EndedDown)
+        {
+            dPlayer2X = 1.0f;
+        }
+        if(Controller->ActionDown.EndedDown)
+        {
+            populate_scene(&state->scene);
+        }
+        if(Controller->ActionUp.EndedDown)
+        {
+            Memory->IsInitialized = false;
+            printf("Set memory to be reinitialized on next frame\n");
+        }
+        if(Controller->ActionRight.EndedDown)
+        {
+            alternate_debug = 1;
         }
 
         dPlayerX *= 256.0f;
         dPlayerY *= 256.0f;
+        dPlayer2X *= 256.0f;
+        dPlayer2Y *= 256.0f;
 
-        state->bmp_x += (Input->dtForFrame * dPlayerX);
-        state->bmp_y += (Input->dtForFrame * dPlayerY);
+        state->player->location.x += (Input->dtForFrame * dPlayerX);
+        state->player->location.y += (Input->dtForFrame * dPlayerY);
+
+        state->player2->location.x += (Input->dtForFrame * dPlayer2X);
+        state->player2->location.y += (Input->dtForFrame * dPlayer2Y);
     }
 
     bzero(Buffer->Memory, Buffer->Pitch * Buffer->Height);
     draw_scene(Buffer, &state->scene, 0, -16);
-    draw_bmp(Buffer, &state->bmp, state->bmp_x, state->bmp_y);
+
+    struct game_object_list {
+        game_object *object;
+        game_object_list *next;
+    };
+
+    game_object_list gl[64] = {};
+    game_object_list *head = gl;
+    game_object_list *temp = gl;
+
+    game_object *iterator = 0;
+    uint count = 0;
+    for(;;)
+    {
+        iterate_bitset_array(state->objects, state->objects_bitset, sizeof(game_object), (void **)&iterator);
+        if (!iterator)
+        {
+            break;
+        }
+
+        if (alternate_debug)
+        {
+            game_object_list *t = head;
+            printf("Starting with list: ");
+            while (t && t->object)
+            {
+                printf("%.03fx%.03f, ", t->object->location.x, t->object->location.y);
+                t = t->next;
+            }
+            printf(".\n");
+            printf("Adding item: %.03fx%.03f\n", iterator->location.x, iterator->location.y);
+        }
+
+        temp->object = iterator;
+        if (head == temp)
+        {
+            // Inserting first node
+            // Already set object above...
+        }
+        else if (iterator->location.y <= head->object->location.y)
+        {
+            // Smaller than first element, simple prepend
+            temp->next = head;
+            head = temp;
+        }
+        else if (!head->next)
+        {
+            // Inserting second node
+            if (iterator->location.y > head->object->location.y)
+            {
+                head->next = temp;
+            }
+        }
+        else
+        {
+            game_object_list *current = head;
+            while (current->next->next && iterator->location.y > current->next->object->location.y)
+            {
+                current = current->next;
+            }
+
+            if (iterator->location.y > current->next->object->location.y)
+            {
+                current->next->next = temp;
+            }
+            else if (iterator->location.y > current->object->location.y)
+            {
+                temp->next = current->next;
+                current->next = temp;
+            }
+            else
+            {
+                printf("iterator->location.y is %.2f\n", iterator->location.y);
+                printf("current->object->location.y is %.2f\n", current->object->location.y);
+                printf("current->next->object->location.y is %.2f\n", current->next->object->location.y);
+            }
+        }
+        temp++;
+        count++;
+
+        if (alternate_debug)
+        {
+            game_object_list *t = head;
+            printf("Ending with list: ");
+            while (t && t->object)
+            {
+                printf("%.03fx%.03f, ", t->object->location.x, t->object->location.y);
+                t = t->next;
+            }
+            printf(".\n");
+        }
+    }
+
+    while (head)
+    {
+        game_object *gt = head->object;
+        draw_bmp(Buffer, gt->sprite->bmp, gt->location.x + gt->sprite->bmp_offset_x, gt->location.y + gt->sprite->bmp_offset_y, gt->sprite->bmp_x, gt->sprite->bmp_y,  gt->sprite->bmp_width, gt->sprite->bmp_height);
+        head = head->next;
+    }
     draw_scene_over(Buffer, &state->scene, 0, -16);
 }
 

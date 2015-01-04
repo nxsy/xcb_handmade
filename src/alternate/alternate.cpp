@@ -13,81 +13,16 @@
 #include "../alternate/bmp.h"
 #include "../alternate/bmp.cpp"
 
+#include "../alternate/alternate.h"
+
+struct game_object_list {
+    game_object *object;
+    game_object_list *next;
+};
+
 bool32 alternate_debug = 0;
 
-struct tileset
-{
-    uint width;
-    uint height;
-    bmp_data bmp;
-};
-
-struct tilemap
-{
-    int16 tile_number;
-    uint8 inverted;
-};
-struct tilescene {
-    tileset tiles;
-    uint8 width;
-    uint8 height;
-    uint8 num_tilemaps_under;
-    uint8 num_tilemaps_over;
-    tilemap *under_maps;
-    tilemap *over_maps;
-};
-
-struct game_location
-{
-    uint32 tile_x;
-    uint32 tile_y;
-
-    real32 x;
-    real32 y;
-};
-
-struct sprite_data
-{
-    bmp_data *bmp;
-    int bmp_x;
-    int bmp_y;
-    int bmp_width;
-    int bmp_height;
-    int bmp_offset_x;
-    int bmp_offset_y;
-    int flags;
-};
-
-struct game_object
-{
-    sprite_data *sprite;
-    game_location location;
-};
-
-#define BITSET(name, type, number) uint64 name##_bitset; type name[number];
-#define BITSET_ALLOCATE(object, name, type) (type *)bitset_allocate(object->name, &object->name##_bitset, sizeof(type))
-
-#define BMP_ALLOCATE(object) BITSET_ALLOCATE(object, bmps, bmp_data)
-#define GAME_OBJECT_ALLOCATE(object) BITSET_ALLOCATE(object, objects, game_object)
-#define SPRITE_ALLOCATE(object) BITSET_ALLOCATE(object, sprites, sprite_data)
-
-struct game_state
-{
-    wav_data wav;
-    bmp_data bmp;
-    tilescene scene;
-
-    BITSET(bmps, bmp_data, 64)
-
-    BITSET(objects, game_object, 64)
-
-    BITSET(sprites, sprite_data, 64)
-
-    game_object *player;
-    game_object *player2;
-};
-
-void *
+static void *
 bitset_allocate(void *data, uint64 *bitset, uint32 size)
 {
     uint8 *databytes = (uint8 *)data;
@@ -110,7 +45,7 @@ bitset_allocate(void *data, uint64 *bitset, uint32 size)
     return (void *)(databytes + (found * size));
 }
 
-void
+static void
 iterate_bitset_array(void *data, uint64 bitset, uint32 size, void **next)
 {
     uint8 *databytes = (uint8 *)data;
@@ -143,7 +78,8 @@ iterate_bitset_array(void *data, uint64 bitset, uint32 size, void **next)
     }
 }
 
-void
+/*
+static void
 bitset_free(void *base, uint64 *bitset, uint32 size, void *to_free)
 {
     uint8 *base_bytes = (uint8 *)base;
@@ -152,11 +88,13 @@ bitset_free(void *base, uint64 *bitset, uint32 size, void *to_free)
     uint offset = (to_free_bytes - base_bytes) / size;
     *bitset &= ~((uint64)pow(2, offset));
 }
+*/
 
 #define DRAW_BMP_INVERTED 1
+#define DRAW_BMP_HIGHLIGHTED 2
 
 // TODO(nbm): Wait for platform layer to support something like this
-void
+static void
 find_data_file(char *seek_filename, uint16 filename_max_length, char *full_filename)
 {
     char *paths[3] = {
@@ -181,10 +119,19 @@ find_data_file(char *seek_filename, uint16 filename_max_length, char *full_filen
     return;
 }
 
-void
+static void
 draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int buffer_x, int buffer_y, int bmp_x, int bmp_y, int bmp_width, int bmp_height, int flags)
 {
     bool32 draw_inverted = flags & DRAW_BMP_INVERTED;
+    int8 r_offset = 0;
+    int8 g_offset = 0;
+    int8 b_offset = 0;
+    if (flags & DRAW_BMP_HIGHLIGHTED)
+    {
+        r_offset = -10;
+        g_offset = -10;
+        b_offset = -10;
+    }
     int buffer_max_x = buffer_x + bmp_width;
     int buffer_max_y = buffer_y + bmp_height;
 
@@ -215,21 +162,17 @@ draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int buffer_x, int buffer
 
     bmp_row += (bmp_pitch * bmp_direction * bmp_y);
 
-    if (draw_inverted > 0)
+    if (draw_inverted == 0)
     {
         bmp_row += (bmp_pitch * bmp_direction * (bmp_height - 1));
         bmp_direction = -bmp_direction;
     }
 
-    uint8 *buffer_row = (uint8 *)buffer->Memory + (buffer_y * buffer->Pitch);
+    uint8 *buffer_row = (uint8 *)buffer->Memory + ((buffer->Height - 1 - buffer_y) * buffer->Pitch);
     while (buffer_y < buffer_max_y)
     {
-        if (buffer_y > buffer->Height)
-        {
-            printf("wtf?\n");
-            break;
-        }
-        uint8 *next_buffer_row = buffer_row + buffer->Pitch;
+        uint8 *next_buffer_row = buffer_row - buffer->Pitch;
+        uint8 *last_buffer_pixel = buffer_row + buffer->Pitch;
 
         uint8 *bmp_next_row = bmp_row + (bmp_pitch * bmp_direction);
         uint32 *buffer_pixel = (uint32 *)buffer_row;
@@ -246,12 +189,21 @@ draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int buffer_x, int buffer
         }
 
         if (buffer_y >= 0) {
-            while(bmp_row_pixel < bmp_final_row_pixel && buffer_pixel < (uint32 *)next_buffer_row)
+            while(bmp_row_pixel < bmp_final_row_pixel && buffer_pixel < (uint32 *)last_buffer_pixel)
             {
                 uint8 *subpixel = (uint8 *)bmp_row_pixel;
                 uint8 *alpha = subpixel + 3;
                 if (*alpha == 255) {
                     *buffer_pixel = *bmp_row_pixel;
+                }
+                if (r_offset || g_offset || b_offset)
+                {
+                    uint8 *b = (uint8 *)buffer_pixel;
+                    uint8 *g = b + 1;
+                    uint8 *r = g + 1;
+                    *b = *b + b_offset;
+                    *r = *r + r_offset;
+                    *g = *g + g_offset;
                 }
                 buffer_pixel++;
                 bmp_row_pixel++;
@@ -264,19 +216,13 @@ draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int buffer_x, int buffer
     }
 }
 
-void
+static void
 draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int buffer_x, int buffer_y, int bmp_x, int bmp_y, int bmp_width, int bmp_height)
 {
     draw_bmp(buffer, data, buffer_x, buffer_y, bmp_x, bmp_y, bmp_width, bmp_height, 0);
 }
 
-void
-draw_bmp(game_offscreen_buffer *buffer, bmp_data *data, int x, int y)
-{
-    draw_bmp(buffer, data, x, y, 0, 0, data->width, data->height);
-}
-
-void
+static void
 draw_tile(game_offscreen_buffer *buffer, tileset *t, int tilenumber, int x, int y, int flags)
 {
     if (tilenumber == -1)
@@ -288,143 +234,460 @@ draw_tile(game_offscreen_buffer *buffer, tileset *t, int tilenumber, int x, int 
     draw_bmp(buffer, &t->bmp, x, y, bmp_x, bmp_y, t->width, t->height, flags);
 }
 
-void
-draw_tile(game_offscreen_buffer *buffer, tileset *t, int tilenumber, int x, int y)
+inline tilemap_chunk *
+get_tile_chunk(tile_map *tilemap, uint32 x, uint32 y)
 {
-    draw_tile(buffer, t, tilenumber, x, y, 0);
+    tilemap_chunk *chunk = 0;
+
+    if((x >= 0) && (x < tilemap->chunk_count_x) &&
+       (y >= 0) && (y < tilemap->chunk_count_y))
+    {
+        chunk = &tilemap->chunks[
+            y * tilemap->chunk_count_x +
+            x];
+    }
+
+    return chunk;
 }
 
-void draw_tilemap(game_offscreen_buffer *buffer, tilescene *scene, tilemap *map, int x, int y)
+inline uint32
+get_tile_value(tile_map *tilemap, tilemap_chunk *chunk, uint32 x, uint32 y)
 {
-    for (uint row = 0;
-            row < scene->height;
-            ++row)
-    {
-        int row_offset = row * scene->width;
+    uint32 tile_value = 29;
 
-        for (uint column = 0;
-                column < scene->width;
-                ++column)
-        {
-            int flags = 0;
-            if (map[row_offset+column].inverted)
-            {
-                flags |= DRAW_BMP_INVERTED;
-            }
-            draw_tile(buffer, &scene->tiles, map[row_offset+column].tile_number, x + (column*scene->tiles.width), y, flags);
-        }
-        y += scene->tiles.height;
+    if(chunk && chunk->tiles)
+    {
+        tile_value = chunk->tiles[y*tilemap->chunk_dim + x];
+    }
+
+    return tile_value;
+}
+
+inline uint32
+get_tile_value(tile_map *tilemap, uint32 abs_tile_x, uint32 abs_tile_y)
+{
+    uint32 tile_value = 200;
+    tilemap_chunk *chunk = get_tile_chunk(tilemap, abs_tile_x >> 4, abs_tile_y >> 4);
+    if(chunk && chunk->tiles)
+    {
+        tile_value = get_tile_value(tilemap, chunk, abs_tile_x & 0xF, abs_tile_y & 0xF);
+    }
+
+    return tile_value;
+}
+
+static void
+set_tile_value(tile_map *tilemap,
+        tilemap_chunk *chunk,
+        uint32 x,
+        uint32 y,
+        uint32 tile_value)
+{
+    if(chunk && chunk->tiles)
+    {
+        chunk->tiles[y*tilemap->chunk_dim + x] = tile_value;
     }
 }
 
-void draw_scene(game_offscreen_buffer *buffer, tilescene *scene, int x, int y)
+static void
+set_tile_value(tile_map *tilemap,
+        uint32 abs_tile_x,
+        uint32 abs_tile_y,
+        uint32 tile_value)
 {
-    draw_tilemap(buffer, scene, &scene->under_maps[0], x, y);
-    draw_tilemap(buffer, scene, &scene->under_maps[scene->width * scene->height], x, y);
-}
-
-void draw_scene_over(game_offscreen_buffer *buffer, tilescene *scene, int x, int y)
-{
-    draw_tilemap(buffer, scene, &scene->over_maps[0], x, y);
-}
-
-void
-set_tile(tilescene *scene, tilemap *tilemap, int tilemap_number, int x, int y, int tile_number)
-{
-    tilemap[(tilemap_number * scene->height * scene->width) + (y * scene->width) + x].tile_number = tile_number;
-}
-
-void
-populate_scene(tilescene *scene)
-{
-    scene->tiles.height = 64;
-    scene->height = 9;
-    scene->tiles.width = 64;
-    scene->width = 15;
-    scene->num_tilemaps_under = 2;
-    scene->num_tilemaps_over = 2;
-    if (scene->under_maps)
+    tilemap_chunk *chunk = get_tile_chunk(tilemap, abs_tile_x >> 4, abs_tile_y >> 4);
+    if(!chunk->tiles)
     {
-        free(scene->under_maps);
-    }
-    scene->under_maps = (tilemap *)calloc(sizeof(tilemap), scene->height * scene->width * scene->num_tilemaps_under);
-    if (scene->over_maps)
-    {
-        free(scene->over_maps);
-    }
-    scene->over_maps = (tilemap *)calloc(sizeof(tilemap), scene->height * scene->width * scene->num_tilemaps_over);
+        uint32 tile_count = tilemap->chunk_dim * tilemap->chunk_dim;
 
-    uint i = 0;
-
-    scene->under_maps[i++].tile_number = 13;
-    while (i < scene->width - 1)
-    {
-        scene->under_maps[i++].tile_number = 45;
-    }
-    scene->under_maps[i++].tile_number = 14;
-
-    for (;
-            i < scene->width * (scene->height - 1);
+        chunk->tiles = (uint32 *)calloc(sizeof(uint32), tile_count);
+        for(uint32 i = 0;
+            i < tile_count;
             ++i)
-    {
-        if (i % scene->width == 0)
         {
-            scene->under_maps[i].tile_number = 30;
+            chunk->tiles[i] = 29;
         }
-        else if ((i + 1) % scene->width == 0)
+    }
+
+    set_tile_value(tilemap, chunk, abs_tile_x & 0xF, abs_tile_y & 0xF, tile_value);
+}
+
+static void
+populate_tilemap(game_state *state, tile_map *tilemap)
+{
+    uint32 tiles_per_width = 11;
+    uint32 tiles_per_height = 7;
+    uint32 screen_x = 0;
+    uint32 screen_y = 0;
+
+    bool32 door_left = false;
+    bool32 door_right = false;
+    bool32 door_top = false;
+    bool32 door_bottom = false;
+
+    for(uint32 screen_index = 0;
+        screen_index < 16;
+        ++screen_index)
+    {
+        uint32 random_choice = rand() % 2;
+
+        if(random_choice == 1)
         {
-            scene->under_maps[i].tile_number = 28;
+            door_right = true;
         }
         else
         {
-            scene->under_maps[i].tile_number = 39;
+            door_top = true;
+        }
+
+        for(uint32 y = 0;
+            y < tiles_per_height;
+            ++y)
+        {
+            for(uint32 x = 0;
+                x < tiles_per_width;
+                ++x)
+            {
+                uint32 abs_tile_x = screen_x * tiles_per_width + x;
+                uint32 abs_tile_y = screen_y * tiles_per_height + y;
+
+                uint32 tile_value = 39;
+
+                if(y == 0)
+                {
+                    if (x == 0)
+                    {
+                        tile_value = 13;
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        tile_value = 14;
+                    }
+                    else if (x == (tiles_per_width / 2))
+                    {
+                        if (!door_bottom)
+                        {
+                            tile_value = 45;
+                        }
+                    }
+                    else if (x == (tiles_per_width / 2) - 1)
+                    {
+                        if (!door_bottom)
+                        {
+                            tile_value = 45;
+                        }
+                        else
+                        {
+                            tile_value = 46;
+                        }
+                    }
+                    else if (x == (tiles_per_width / 2) + 1)
+                    {
+                        if (!door_bottom)
+                        {
+                            tile_value = 45;
+                        }
+                        else
+                        {
+                            tile_value = 44;
+                        }
+                    }
+                    else {
+                        tile_value = 45;
+                    }
+                }
+                else if (y == (tiles_per_height - 1))
+                {
+                    if (x == 0)
+                    {
+                        tile_value = 31;
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        tile_value = 32;
+                    }
+                    else if (x == (tiles_per_width / 2))
+                    {
+                        if (!door_top)
+                        {
+                            tile_value = 45 | (1<<31);
+                        }
+                    }
+                    else if (x == (tiles_per_width / 2) - 1)
+                    {
+                        if (!door_top)
+                        {
+                            tile_value = 45 | (1<<31);
+                        }
+                        else
+                        {
+                            tile_value = 46 | (1<<31);
+                        }
+                    }
+                    else if (x == (tiles_per_width / 2) + 1)
+                    {
+                        if (!door_top)
+                        {
+                            tile_value = 45 | (1<<31);
+                        }
+                        else
+                        {
+                            tile_value = 44 | (1<<31);
+                        }
+                    }
+                    else {
+                        tile_value = 45 | (1<<31);
+                    }
+                }
+                else if (y == (tiles_per_height / 2))
+                {
+                    if (x == 0)
+                    {
+                        if (!door_left) {
+                            tile_value = 30;
+                        }
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        if (!door_right)
+                        {
+                            tile_value = 28;
+                        }
+                    }
+                }
+                else if (y == (tiles_per_height / 2) - 1)
+                {
+                    if (x == 0)
+                    {
+                        if (!door_left) {
+                            tile_value = 30;
+                        }
+                        else
+                        {
+                            tile_value = 46;
+                        }
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        if (!door_right)
+                        {
+                            tile_value = 28;
+                        }
+                        else
+                        {
+                            tile_value = 44;
+                        }
+                    }
+                }
+                else if (y == (tiles_per_height / 2) + 1)
+                {
+                    if (x == 0)
+                    {
+                        if (!door_left) {
+                            tile_value = 30;
+                        }
+                        else
+                        {
+                            tile_value = 46 | (1<<31);
+                        }
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        if (!door_right)
+                        {
+                            tile_value = 28;
+                        }
+                        else
+                        {
+                            tile_value = 44 | (1<<31);
+                        }
+                    }
+                }
+                else
+                {
+                    if (x == 0)
+                    {
+                        tile_value = 30;
+                    }
+                    else if (x == (tiles_per_width - 1))
+                    {
+                        tile_value = 28;
+                    }
+                }
+
+                set_tile_value(
+                        tilemap,
+                        abs_tile_x,
+                        abs_tile_y,
+                        tile_value);
+            }
+        }
+
+        door_left = door_right;
+        door_bottom = door_top;
+
+        door_right = false;
+        door_top = false;
+
+        if(random_choice == 1)
+        {
+            screen_x += 1;
+        }
+        else
+        {
+            screen_y += 1;
+        }
+    }
+}
+
+void
+draw_screen(game_offscreen_buffer *Buffer, game_state *state, game_object_list *head)
+{
+    real32 screen_center_x = 0.5f * (real32)Buffer->Width;
+    real32 screen_center_y = 0.5f * (real32)Buffer->Height;
+
+    uint32 mid_tile_y = screen_center_y / state->tilemap.tile_side_in_pixels;
+    uint32 mid_tile_x = screen_center_x / state->tilemap.tile_side_in_pixels;
+
+    real32 y_offset = 0;
+    real32 x_offset = 0;
+
+    uint32 bottom_row = 0;
+    if ((state->player->location.tile_y > mid_tile_y) ||
+            ((state->player->location.tile_y == mid_tile_y) && state->player->location.y > 0))
+    {
+        bottom_row = state->player->location.tile_y - mid_tile_y;
+        y_offset = -(state->player->location.y * state->tilemap.meters_to_pixels);
+    }
+    uint32 top_row = bottom_row + ceil((real32)Buffer->Height / state->tilemap.tile_side_in_pixels);
+
+    uint32 left_column = 0;
+    if ((state->player->location.tile_x > mid_tile_x) ||
+            ((state->player->location.tile_x == mid_tile_x) && state->player->location.x > 0))
+    {
+        left_column = state->player->location.tile_x - mid_tile_x;
+        x_offset = -(state->player->location.x * state->tilemap.meters_to_pixels);
+    }
+    uint32 right_column = left_column + ceil((real32)Buffer->Width / state->tilemap.tile_side_in_pixels);
+
+    for(uint32 row = bottom_row > 0 ? bottom_row - 1 : bottom_row;
+        row < top_row + 1;
+        ++row)
+    {
+        for(uint32 column = left_column > 0 ? left_column - 1 : left_column;
+            column < right_column + 1;
+            ++column)
+        {
+            uint32 tile_value = get_tile_value(&state->tilemap, column, row);
+
+            int flags = DRAW_BMP_INVERTED;
+            if (tile_value & (1 << 31))
+            {
+                flags &= ~DRAW_BMP_INVERTED;
+                tile_value &= ~(1<<31);
+
+            }
+            uint32 x = (column - left_column) * state->tilemap.tile_side_in_pixels;
+            uint32 y = (row - bottom_row) * state->tilemap.tile_side_in_pixels - 18;
+            x += (int32)x_offset;
+            y += (int32)y_offset;
+            if (state->player->location.tile_x == column && state->player->location.tile_y == row)
+            {
+                flags |= DRAW_BMP_HIGHLIGHTED;
+            }
+            draw_tile(Buffer, &state->tilemap.tile_set, tile_value, x, y, flags);
         }
     }
 
-    scene->under_maps[i++].tile_number = 31;
-    while (i < (scene->width * scene->height - 1))
+    while (head)
     {
-        scene->under_maps[i].inverted = 1;
-        scene->under_maps[i++].tile_number = 45;
-    }
-    scene->under_maps[i++].tile_number = 32;
+        game_object *gt = head->object;
 
-    tilemap *under_map2 = &scene->under_maps[scene->width * scene->height];
-    for (int j = 0;
-            j < (scene->width * scene->height);
-            ++j)
-    {
-        under_map2[j].tile_number = -1;
+        int32 object_tile_row = (int32)gt->location.tile_y - bottom_row;
+        int32 object_tile_column = (int32)gt->location.tile_x - left_column;
+
+        real32 object_pixel_row = (object_tile_row * (int32)state->tilemap.tile_side_in_pixels) +
+            (gt->location.y * state->tilemap.meters_to_pixels);
+        real32 object_pixel_column = (object_tile_column * (int32)state->tilemap.tile_side_in_pixels) +
+            (gt->location.x * state->tilemap.meters_to_pixels);
+
+        object_pixel_row += y_offset;
+        object_pixel_column += x_offset;
+
+        draw_bmp(Buffer, gt->sprite->bmp, object_pixel_column + gt->sprite->bmp_offset_x, object_pixel_row + gt->sprite->bmp_offset_y, gt->sprite->bmp_x, gt->sprite->bmp_y,  gt->sprite->bmp_width, gt->sprite->bmp_height);
+        head = head->next;
     }
 
-    tilemap *over_map = scene->over_maps;
-    for (int j = 0;
-            j < (scene->width * scene->height);
-            ++j)
-    {
-        over_map[j].tile_number = -1;
-    }
 }
+
+void
+recanonicalize(tile_map *tilemap, uint32 *tile, real32 *rel)
+{
+    int32 offset = roundf(*rel / tilemap->tile_side_in_meters);
+    *tile += offset;
+    *rel -= offset * tilemap->tile_side_in_meters;
+}
+
+void
+recanonicalize(tile_map *tilemap, world_position *location)
+{
+    recanonicalize(tilemap, &location->tile_x, &location->x);
+    recanonicalize(tilemap, &location->tile_y, &location->y);
+}
+
+inline bool32
+location_greater(world_position i, world_position j)
+{
+    bool32 ret = false;
+    if (i.tile_y > j.tile_y)
+    {
+        ret = true;
+    }
+    else if (i.tile_y == j.tile_y)
+    {
+        if (i.y > j.y)
+        {
+            ret = true;
+        }
+    }
+    return ret;
+}
+
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     game_state *state = (game_state *)Memory->PermanentStorage;
     if(!Memory->IsInitialized)
     {
+        HHXCB_ASSERT(sizeof(tilemap_position) == 4);
+        HHXCB_ASSERT(sizeof(world_position) == 16);
+
         printf("Initializing memory\n");
         *state = {};
         state->wav = {};
-        state->scene = {};
+        state->tilemap = {};
+        state->tilemap.chunk_dim = 16;
+        state->tilemap.tile_side_in_pixels = 64;
+        state->tilemap.tile_side_in_meters = 1.4f;
+        state->tilemap.meters_to_pixels = state->tilemap.tile_side_in_pixels / state->tilemap.tile_side_in_meters;
+        state->tilemap.chunk_count_x = 16;
+        state->tilemap.chunk_count_y = 16;
+        uint32 total_chunks = state->tilemap.chunk_count_x * state->tilemap.chunk_count_y;
+
+        state->tilemap.chunks = (tilemap_chunk *)calloc(sizeof(tilemap_chunk), total_chunks);
+        populate_tilemap(state, &state->tilemap);
+
         state->objects_bitset = 0;
         state->bmps_bitset = 0;
+
         char filename[1024];
         find_data_file((char *)"Loop-Menu.wav", sizeof(filename), filename);
         wav_open(filename, &state->wav);
 
         find_data_file((char *)"KenneyRPGpack.bmp", sizeof(filename), filename);
-        bmp_open(filename, &state->scene.tiles.bmp);
-
-        populate_scene(&state->scene);
+        bmp_open(filename, &state->tilemap.tile_set.bmp);
+        state->tilemap.tile_set.width = 64;
+        state->tilemap.tile_set.height = 64;
 
         Memory->IsInitialized = true;
 
@@ -442,20 +705,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 game_object *g = GAME_OBJECT_ALLOCATE(state);
                 g->sprite = s;
-                g->location.tile_x = 0;
-                g->location.tile_y = 0;
-                g->location.x = 250;
-                g->location.y = 250;
+                g->location.tile_x = 2;
+                g->location.tile_y = 2;
+                g->location.x = 0;
+                g->location.y = 0;
                 state->player = g;
             }
 
             {
                 game_object *g = GAME_OBJECT_ALLOCATE(state);
                 g->sprite = s;
-                g->location.tile_x = 0;
-                g->location.tile_y = 0;
-                g->location.x = 150;
-                g->location.y = 150;
+                g->location.tile_x = 3;
+                g->location.tile_y = 3;
+                g->location.x = 0;
+                g->location.y = 0;
                 state->player2 = g;
             }
         }
@@ -473,21 +736,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             s->bmp_x = (175 * 64) % b->width;
             s->bmp_y = ((175 * 64) / b->width) * 64;
             s->bmp_offset_x = 0;
-            s->bmp_offset_y = -64;
+            s->bmp_offset_y = 64;
 
             game_object *g = GAME_OBJECT_ALLOCATE(state);
             g->sprite = s;
-            g->location.tile_x = 0;
-            g->location.tile_y = 0;
-            g->location.x = 128;
-            g->location.y = 128;
+            g->location.tile_x = 4;
+            g->location.tile_y = 4;
+            g->location.x = 0;
+            g->location.y = 0;
 
             g = GAME_OBJECT_ALLOCATE(state);
             g->sprite = s;
-            g->location.tile_x = 0;
-            g->location.tile_y = 0;
-            g->location.x = 192;
-            g->location.y = 192;
+            g->location.tile_x = 6;
+            g->location.tile_y = 3;
+            g->location.x = 0;
+            g->location.y = 0;
 
             s = SPRITE_ALLOCATE(state);
 
@@ -501,17 +764,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
             g = GAME_OBJECT_ALLOCATE(state);
             g->sprite = s;
-            g->location.tile_x = 0;
-            g->location.tile_y = 0;
-            g->location.x = 128;
-            g->location.y = 128;
+            g->location.tile_x = 4;
+            g->location.tile_y = 4;
+            g->location.x = 0;
+            g->location.y = 0;
 
             g = GAME_OBJECT_ALLOCATE(state);
             g->sprite = s;
-            g->location.tile_x = 0;
-            g->location.tile_y = 0;
-            g->location.x = 192;
-            g->location.y = 192;
+            g->location.tile_x = 6;
+            g->location.tile_y = 3;
+            g->location.x = 0;
+            g->location.y = 0;
         }
     }
 
@@ -528,18 +791,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         game_controller_input *Controller = &Input->Controllers[index];
 
-        //if(Controller->IsAnalog)
-        //{
-            dPlayerX += Controller->StickAverageX;
-            dPlayerY += Controller->StickAverageY;
-        //}
+        dPlayerX += Controller->StickAverageX;
+        dPlayerY -= Controller->StickAverageY;
+
         if(Controller->MoveUp.EndedDown)
         {
-            dPlayer2Y = -1.0f;
+            dPlayer2Y = 1.0f;
         }
         if(Controller->MoveDown.EndedDown)
         {
-            dPlayer2Y = 1.0f;
+            dPlayer2Y = -1.0f;
         }
         if(Controller->MoveLeft.EndedDown)
         {
@@ -548,10 +809,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if(Controller->MoveRight.EndedDown)
         {
             dPlayer2X = 1.0f;
-        }
-        if(Controller->ActionDown.EndedDown)
-        {
-            populate_scene(&state->scene);
         }
         if(Controller->ActionUp.EndedDown)
         {
@@ -562,26 +819,57 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             alternate_debug = 1;
         }
+        if(Controller->RightShoulder.EndedDown)
+        {
+            dPlayerX *= 4.0f;
+            dPlayerY *= 4.0f;
+        }
 
-        dPlayerX *= 256.0f;
-        dPlayerY *= 256.0f;
-        dPlayer2X *= 256.0f;
-        dPlayer2Y *= 256.0f;
+        dPlayerX *= 4.0f;
+        dPlayerY *= 4.0f;
+        dPlayer2X *= 4.0f;
+        dPlayer2Y *= 4.0f;
 
-        state->player->location.x += (Input->dtForFrame * dPlayerX);
-        state->player->location.y += (Input->dtForFrame * dPlayerY);
+        world_position test_positions[3] = {
+            state->player->location,
+            state->player->location,
+            state->player->location,
+        };
+        bool32 move_impossible = 0;
+        for (uint i = 0;
+                i < 3;
+                ++i)
+        {
+            world_position *t = &test_positions[i];
+            t->x += (Input->dtForFrame * dPlayerX);
+            t->y += (Input->dtForFrame * dPlayerY);
+            t->x += -.30f + (.30f * i);
+            recanonicalize(&state->tilemap, t);
+            uint32 tile_value = get_tile_value(&state->tilemap, t->tile_x, t->tile_y);
+            tile_value &= 0xFF;
+            if (tile_value != 39)
+            {
+                printf("try #%d: tile_x: %d, tile_y: %d,\n", i, t->tile_x, t->tile_y);
+                printf("tile_value: %d\n", tile_value);
+                move_impossible = 1;
+                break;
+            }
+        }
+
+        if (!move_impossible)
+        {
+            state->player->location.x += (Input->dtForFrame * dPlayerX);
+            state->player->location.y += (Input->dtForFrame * dPlayerY);
+        }
+
 
         state->player2->location.x += (Input->dtForFrame * dPlayer2X);
         state->player2->location.y += (Input->dtForFrame * dPlayer2Y);
     }
 
-    bzero(Buffer->Memory, Buffer->Pitch * Buffer->Height);
-    draw_scene(Buffer, &state->scene, 0, -16);
+    recanonicalize(&state->tilemap, &state->player->location);
 
-    struct game_object_list {
-        game_object *object;
-        game_object_list *next;
-    };
+    bzero(Buffer->Memory, Buffer->Pitch * Buffer->Height);
 
     game_object_list gl[64] = {};
     game_object_list *head = gl;
@@ -603,12 +891,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             printf("Starting with list: ");
             while (t && t->object)
             {
-                printf("%.03fx%.03f, ", t->object->location.x, t->object->location.y);
+                printf("%dx%d|%.03fx%.03f, ", t->object->location.tile_x,
+                        t->object->location.tile_y, t->object->location.x,
+                        t->object->location.y);
                 t = t->next;
             }
             printf(".\n");
-            printf("Adding item: %.03fx%.03f\n", iterator->location.x, iterator->location.y);
+            printf("Adding item: %dx%d|%.03fx%.03f\n",
+                    iterator->location.tile_x, iterator->location.tile_y,
+                    iterator->location.x, iterator->location.y);
         }
+
 
         temp->object = iterator;
         if (head == temp)
@@ -616,16 +909,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Inserting first node
             // Already set object above...
         }
-        else if (iterator->location.y <= head->object->location.y)
+        else if (location_greater(iterator->location, head->object->location))
         {
-            // Smaller than first element, simple prepend
             temp->next = head;
             head = temp;
         }
         else if (!head->next)
         {
             // Inserting second node
-            if (iterator->location.y > head->object->location.y)
+            if (!location_greater(iterator->location, head->object->location))
             {
                 head->next = temp;
             }
@@ -633,16 +925,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         else
         {
             game_object_list *current = head;
-            while (current->next->next && iterator->location.y > current->next->object->location.y)
+            while (current->next->next && !location_greater(iterator->location, current->next->object->location))
             {
                 current = current->next;
             }
 
-            if (iterator->location.y > current->next->object->location.y)
+            if (!location_greater(iterator->location, current->next->object->location))
             {
                 current->next->next = temp;
             }
-            else if (iterator->location.y > current->object->location.y)
+            else if (!location_greater(iterator->location, current->object->location))
             {
                 temp->next = current->next;
                 current->next = temp;
@@ -663,20 +955,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             printf("Ending with list: ");
             while (t && t->object)
             {
-                printf("%.03fx%.03f, ", t->object->location.x, t->object->location.y);
+                printf("%dx%d|%.03fx%.03f, ", t->object->location.tile_x,
+                        t->object->location.tile_y, t->object->location.x,
+                        t->object->location.y);
                 t = t->next;
             }
             printf(".\n");
         }
     }
 
-    while (head)
-    {
-        game_object *gt = head->object;
-        draw_bmp(Buffer, gt->sprite->bmp, gt->location.x + gt->sprite->bmp_offset_x, gt->location.y + gt->sprite->bmp_offset_y, gt->sprite->bmp_x, gt->sprite->bmp_y,  gt->sprite->bmp_width, gt->sprite->bmp_height);
-        head = head->next;
-    }
-    draw_scene_over(Buffer, &state->scene, 0, -16);
+    draw_screen(Buffer, state, head);
 }
 
 extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)

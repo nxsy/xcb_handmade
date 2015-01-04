@@ -1,5 +1,6 @@
 #if !defined(HHXCB_WAV_H)
 #include "../handmade_platform.h"
+#include "../alternate/common.h"
 
 struct __attribute__((__packed__)) wav_file_header {
     char ckID[4];

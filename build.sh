@@ -7,7 +7,7 @@ XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lasound"
 CPPFLAGS="-DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 WARNFLAGS="-Wall -Wno-unused-variable"
 GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"
-DEBUG_FLAGS="-DDEBUG -g"
+DEBUG_FLAGS="-DDEBUG -g -DHANDMADE_SLOW=1 -DHHXCB_SLOW=1"
 
 mkdir -p build
 

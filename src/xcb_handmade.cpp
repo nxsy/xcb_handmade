@@ -210,28 +210,48 @@ DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_xcb_free_file_memory)
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(debug_xcb_read_entire_file)
 {
-    // TODO(nbm): Maybe finish writing this?
-
     debug_read_file_result result = {};
-    uint32_t fd = open(Filename, O_RDONLY);
-    if (fd < 0)
+
+    FILE *f = fopen(Filename, "rb");
+
+    if (f == 0)
     {
         printf("Failed to open file %s\n", Filename);
         return result;
     }
 
-    struct stat statbuf = {};
-    uint32_t stat_result = fstat(fd, &statbuf);
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-    if (stat_result != 0)
-    {
-        printf("Failed to stat opened file %s\n", Filename);
-        return result;
-    }
-    printf("Reading file %s, stat_result is %u\n", Filename, stat_result);
+    char *string = (char *)malloc(fsize + 1);
+    fread(string, fsize, 1, f);
+    fclose(f);
 
-    return result;
+    string[fsize] = 0;
+
+    result.Contents = string;
+    result.ContentsSize = fsize;
+
+    return(result);
 }
+
+DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_xcb_write_entire_file)
+{
+    FILE *f = fopen(Filename, "wb");
+
+    if (f == 0)
+    {
+        printf("Failed to open file %s\n", Filename);
+        return 0;
+    }
+
+    size_t res = fwrite(Memory, 1, MemorySize, f);
+    fclose(f);
+
+    return res == MemorySize;
+}
+
 #endif
 
 internal void
@@ -453,7 +473,6 @@ hhxcb_playback_input(hhxcb_state *state, game_input *new_input)
         read(state->playback_fd, new_input, sizeof(*new_input));
     }
 }
-
 
 internal void
 hhxcb_process_keyboard_message(game_button_state *new_state, bool32 is_down)
@@ -740,7 +759,6 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
             }
             default:
             {
-                printf("Unhandled unknown response type: %u\n", event->response_type);
                 break;
             }
         }
@@ -973,10 +991,6 @@ main()
 
     thread_context t = {};
 
-#ifdef HANDMADE_INTERNAL
-    debug_xcb_read_entire_file(&t, (char *)"handmade.h");
-#endif
-
     game_memory m = {};
     m.PermanentStorageSize = 64 * 1024 * 1024;
     m.TransientStorageSize = 64 * 1024 * 1024;
@@ -987,8 +1001,8 @@ main()
         (uint8_t *)m.PermanentStorage + m.TransientStorageSize;
 #ifdef HANDMADE_INTERNAL
     m.DEBUGPlatformFreeFileMemory = debug_xcb_free_file_memory;
-    // m.DEBUGPlatformReadEntireFile;
-    // m.DEBUGPlatformWriteEntireFile;
+    m.DEBUGPlatformReadEntireFile = debug_xcb_read_entire_file;
+    m.DEBUGPlatformWriteEntireFile = debug_xcb_write_entire_file;
 #endif
 
     hhxcb_init_replays(&state);

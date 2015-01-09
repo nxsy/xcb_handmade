@@ -17,7 +17,7 @@ A number of XCB libraries and headers are needed to build and run.  Here is a
 partial list of Ubuntu packages needed (the dev packages include the run-time
 libraries):
 
-* libxcb1-dev - the X 
+* libxcb1-dev - the X protocol C-language binding library
 * libxcb-icccm4-dev - this is for setting the window title primarily
 * libxcb-image0-dev - The image extension, needed for creating a graphics
   buffer in memory
@@ -33,31 +33,42 @@ too:
 Build process
 -------------
 
-Symlink handmade.h and handmade.cpp into the src directory.
+Symlink the platform-independent Handmade Hero code files into the src
+directory.
 
-    ln -s /path/to/handmadehero/handmade.h src/
-    ln -s /path/to/handmadehero/handmade.cpp src/
-    ln -s /path/to/handmadehero/handmade_platform.cpp src/
+    ln -s /path/to/handmadehero/handmade* src/
 
 I’m creating a hh/ directory and unzipping the Handmade Hero source (and a
 particular day) in there.  My symlinks look like this:
 
-    lrwxrwxrwx 1 nbm nbm 27 Dec 21 10:32 src/handmade.cpp -> ../hh/code/handmade.cpp
-    lrwxrwxrwx 1 nbm nbm 25 Dec 21 10:32 src/handmade.h -> ../hh/code/handmade.h
-    lrwxrwxrwx 1 nbm nbm 30 Dec 27 15:12 src/handmade_platform.h -> ../hh/code/handmade_platform.h
+
+lrwxrwxrwx 1 nbm nbm 23 Jan  8 16:41 src/handmade.cpp -> ../hh/code/handmade.cpp
+lrwxrwxrwx 1 nbm nbm 21 Jan  8 16:41 src/handmade.h -> ../hh/code/handmade.h
+lrwxrwxrwx 1 nbm nbm 32 Jan  8 16:41 src/handmade_intrinsics.h -> ../hh/code/handmade_intrinsics.h
+lrwxrwxrwx 1 nbm nbm 30 Jan  8 16:41 src/handmade_platform.h -> ../hh/code/handmade_platform.h
+lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_random.h -> ../hh/code/handmade_random.h
+lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_tile.cpp -> ../hh/code/handmade_tile.cpp
+lrwxrwxrwx 1 nbm nbm 26 Jan  8 16:41 src/handmade_tile.h -> ../hh/code/handmade_tile.h
 
 Build!
 
     sh build.sh
 
+Don’t forget to install the assets (separate Handmade Hero download) into the
+data/ directory.  Currently that would create a data/test directory at the
+moment.
+
 Run!
 
     build/xcb_handmade
 
+You can use WASD for movement (or the XBox 360 D-pad), and Up Arrow (or the Y
+button on the XBox 360 controller) to sprint.
+
 Implementation progress
 -----------------------
 
-I currently have parity with Handmade Hero Day 30!
+We currently have parity with Handmade Hero Day 38!
 
 Completed (at least partially) so far:
 
@@ -70,10 +81,11 @@ Completed (at least partially) so far:
 * XBox360 controller support
 * Frame timing and locking
 * Save state, record, and replay.
+* Debug platform functions (read file, write file, free memory)
 
 Still needed:
 
-* Debug platform functions (read file, write file, free memory)
+* We’re good!
 
 Alternate build
 ---------------
@@ -92,7 +104,9 @@ The files in data/ were created by others.  See data/README.md for copyright
 information, credits, and licensing information.
 
 The xcb platform layer and the alternate build in src/alternate/ was written by
-Neil Blakey-Milner (and in future others?), and is freely distributable in
+Neil Blakey-Milner (and others listed below), and is freely distributable in
 isolation under the BSD license, as specified in the header of the relevant
 files.
 
+Jonathan Nilsson contributed the platform layer debug read/write file
+functions.

@@ -39,7 +39,15 @@
 #include <unistd.h>   // readlink
 
 #include <xcb/xcb.h>
+
+/*
+ * Some versions of this header use class as a function argument name, which
+ * C++ does not like...
+ */
+#define class class_name
 #include <xcb/xcb_icccm.h>
+#undef class
+
 #include <xcb/xcb_image.h>
 #include <xcb/xcb_keysyms.h>
 
@@ -68,15 +76,6 @@
 #endif
 #define _HHXCB_QUOTE2(X) #X
 #define _HHXCB_QUOTE(X) _HHXCB_QUOTE2(X)
-
-inline game_controller_input *
-GetController(game_input *input, uint8 index)
-{
-    Assert(index < ArrayCount(input->Controllers));
-
-    game_controller_input *result = &input->Controllers[index];
-    return result;
-}
 
 internal real32
 hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)

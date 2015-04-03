@@ -42,13 +42,13 @@ I’m creating a hh/ directory and unzipping the Handmade Hero source (and a
 particular day) in there.  My symlinks look like this:
 
 
-lrwxrwxrwx 1 nbm nbm 23 Jan  8 16:41 src/handmade.cpp -> ../hh/code/handmade.cpp
-lrwxrwxrwx 1 nbm nbm 21 Jan  8 16:41 src/handmade.h -> ../hh/code/handmade.h
-lrwxrwxrwx 1 nbm nbm 32 Jan  8 16:41 src/handmade_intrinsics.h -> ../hh/code/handmade_intrinsics.h
-lrwxrwxrwx 1 nbm nbm 30 Jan  8 16:41 src/handmade_platform.h -> ../hh/code/handmade_platform.h
-lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_random.h -> ../hh/code/handmade_random.h
-lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_tile.cpp -> ../hh/code/handmade_tile.cpp
-lrwxrwxrwx 1 nbm nbm 26 Jan  8 16:41 src/handmade_tile.h -> ../hh/code/handmade_tile.h
+    lrwxrwxrwx 1 nbm nbm 23 Jan  8 16:41 src/handmade.cpp -> ../hh/code/handmade.cpp
+    lrwxrwxrwx 1 nbm nbm 21 Jan  8 16:41 src/handmade.h -> ../hh/code/handmade.h
+    lrwxrwxrwx 1 nbm nbm 32 Jan  8 16:41 src/handmade_intrinsics.h -> ../hh/code/handmade_intrinsics.h
+    lrwxrwxrwx 1 nbm nbm 30 Jan  8 16:41 src/handmade_platform.h -> ../hh/code/handmade_platform.h
+    lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_random.h -> ../hh/code/handmade_random.h
+    lrwxrwxrwx 1 nbm nbm 28 Jan  8 16:41 src/handmade_tile.cpp -> ../hh/code/handmade_tile.cpp
+    lrwxrwxrwx 1 nbm nbm 26 Jan  8 16:41 src/handmade_tile.h -> ../hh/code/handmade_tile.h
 
 Build!
 

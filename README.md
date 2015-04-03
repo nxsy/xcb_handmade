@@ -9,7 +9,7 @@ Prerequisites
 
 Most importantly, you’ll need Handmade Hero source code for the
 platform-independent game code.  Pre-order the game and get the nightly source
-code.
+code.  This revision works with day 39 or later.
 
 You will need g++ (tested with g++ 4.6) or other C++ compiler.
 
@@ -68,7 +68,7 @@ button on the XBox 360 controller) to sprint.
 Implementation progress
 -----------------------
 
-We currently have parity with Handmade Hero Day 38!
+We currently have parity with Handmade Hero Day 39!
 
 Completed (at least partially) so far:
 

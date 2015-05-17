@@ -72,7 +72,9 @@ and build/opt to be able to run the binaries in place with textures.
 Run!
 
     build/debug/xcb_handmade
+
 or
+
     build/opt/xcb_handmade
 
 

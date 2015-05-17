@@ -85,11 +85,13 @@ IACA
 ----
 
 To use intel's architecture code analyzer to see which assembly instructions
-are used in a loop and the throughput/latency of said instructions, you should 
+are used in a loop, and the throughput/latency of said instructions, you should 
 download IACA from intel and place the extracted files in the directory of 
-your choice. Note that the nhm.sh and build.sh scripts expect the iaca 
-directory to be siblings with the base xcb_handmade directory, so if you 
-choose a different location you will have to modify these scripts.
+your choice.
+
+Note that the nhm.sh and build.sh scripts expect the iaca directory to be 
+siblings with the base xcb_handmade directory, so if you choose a different 
+location you will have to modify these scripts.
 
 To run IACA:
 

@@ -1050,7 +1050,6 @@ main()
         game_buffer.Width = buffer.width;
         game_buffer.Height = buffer.height;
         game_buffer.Pitch = buffer.pitch;
-        game_buffer.BytesPerPixel = buffer.bytes_per_pixel;
 
         if (state.recording_index)
         {

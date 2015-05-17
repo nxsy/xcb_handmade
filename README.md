@@ -81,6 +81,23 @@ or
 You can use WASD for movement (or the XBox 360 D-pad), and Up Arrow (or the Y
 button on the XBox 360 controller) to sprint.
 
+IACA
+----
+
+To use intel's architecture code analyzer to see which assembly instructions
+are used in a loop and the throughput/latency of said instructions, you should 
+download IACA from intel and place the extracted files in the directory of 
+your choice. Note that the nhm.sh and build.sh scripts expect the iaca 
+directory to be siblings with the base xcb_handmade directory, so if you 
+choose a different location you will have to modify these scripts.
+
+To run IACA:
+
+    ./nhm.sh
+
+after switching on IACA in handmade_render_group.cpp and compiling.
+
+
 Implementation progress
 -----------------------
 

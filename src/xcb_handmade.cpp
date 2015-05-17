@@ -1019,8 +1019,8 @@ main()
     thread_context t = {};
 
     game_memory m = {};
-    m.PermanentStorageSize = 64 * 1024 * 1024;
-    m.TransientStorageSize = 64 * 1024 * 1024;
+    m.PermanentStorageSize = 256 * 1024 * 1024;
+    m.TransientStorageSize = 256 * 1024 * 1024;
     state.total_size = m.PermanentStorageSize + m.TransientStorageSize;
     state.game_memory_block = calloc(state.total_size, sizeof(uint8));
     m.PermanentStorage = (uint8 *)state.game_memory_block;

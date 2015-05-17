@@ -254,6 +254,30 @@ DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_xcb_write_entire_file)
 #endif
 
 internal void
+HandleDebugCycleCounter(game_memory* m)
+{
+#ifdef HANDMADE_INTERNAL
+	printf("DEBUG CYCLE COUNTS:\n");
+	
+	for(uint CounterIndex =0;
+		CounterIndex < ArrayCount(m->Counters);
+		++CounterIndex)
+	{
+		debug_cycle_counter* Counter = m->Counters + CounterIndex;
+		if(Counter->HitCount)
+		{
+			printf("  %d: %lucy %uh %lucy/h\n", CounterIndex,
+				   Counter->CycleCount, Counter->HitCount, 
+				   (uint64)(Counter->CycleCount / Counter->HitCount));
+			Counter->HitCount = 0;
+			Counter->CycleCount = 0;
+		}
+	}
+#endif
+}
+
+
+internal void
 hhxcb_get_binary_name(hhxcb_state *state)
 {
     // NOTE(nbm): There are probably pathological cases where this won't work - for
@@ -1061,9 +1085,12 @@ main()
         {
             hhxcb_playback_input(&state, new_input);
         }
-
-        game_code.UpdateAndRender(&t, &m, new_input, &game_buffer);
-
+        if (game_code.UpdateAndRender)
+        {
+            game_code.UpdateAndRender(&t, &m, new_input, &game_buffer);
+            HandleDebugCycleCounter(&m);
+        }
+	
         game_sound_output_buffer sound_buffer;
         sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
         sound_buffer.SampleCount = sound_output.samples_per_second / 30;

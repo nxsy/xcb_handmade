@@ -865,8 +865,9 @@ hhxcb_refresh_controllers(hhxcb_context *context)
 internal
 void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
 {
-    // char *device = (char *)"default";
-    char *device = (char *)"hw:0,0";
+    // NOTE: "hw:0,0" doesn't seem to work with alsa running on top of pulseaudio
+    char *device = (char *)"default";
+    // char *device = (char *)"hw:0,0";
 
     int err;
     snd_pcm_sframes_t frames;
@@ -888,7 +889,8 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_hw_params_set_channels(context->handle, hwparams, 2);
     snd_pcm_hw_params_set_rate(context->handle, hwparams, sound_output->samples_per_second, 0);
     snd_pcm_hw_params_set_period_size(context->handle, hwparams, sound_output->samples_per_second / 60, 0);
-    sound_output->secondary_buffer_size = 48000 / 4;
+    // NOTE: restricting this buffer size too much seems to crash the game
+    sound_output->secondary_buffer_size = 48000 / 2;
     snd_pcm_hw_params_set_buffer_size(context->handle, hwparams, sound_output->secondary_buffer_size);
     snd_pcm_hw_params(context->handle, hwparams);
     snd_pcm_dump(context->handle, context->alsa_log);

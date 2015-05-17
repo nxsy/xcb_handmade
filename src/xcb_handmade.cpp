@@ -1135,6 +1135,31 @@ main()
             }
         }
 
+        // NOTE: modify "game_buffer.Memory" to invert image
+#if 1
+        int32 lineStore[game_buffer.Width*game_buffer.Height] = {};
+        int32* currentPixel = (int32*)game_buffer.Memory;
+        int32* currentLine = currentPixel;
+        int32* swapLine = currentLine +
+            (game_buffer.Height-1)*game_buffer.Width;
+        int32* swapPixel = swapLine;
+        for(int Y = 0; Y < game_buffer.Height*.5; ++Y)
+        {
+            currentPixel = currentLine;
+            swapPixel = swapLine;
+            for(int X = 0; X < game_buffer.Width; ++X)
+            {
+                lineStore[(Y*game_buffer.Width)+X] = *currentPixel;
+                *currentPixel = *swapPixel;
+                *swapPixel = *(lineStore + ((Y*game_buffer.Width)+X));
+
+                ++currentPixel;
+                ++swapPixel;
+            }
+            currentLine += game_buffer.Width;
+            swapLine -= game_buffer.Width;
+        }
+#endif
 
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);

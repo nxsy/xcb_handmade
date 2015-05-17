@@ -700,11 +700,11 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
                 }
                 else if (keysym == XK_Escape)
                 {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->Start, is_down);
+                    hhxcb_process_keyboard_message(&new_keyboard_controller->Back, is_down);
                 }
                 else if (keysym == XK_space)
                 {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->Back, is_down);
+                    hhxcb_process_keyboard_message(&new_keyboard_controller->Start, is_down);
                 }
                 else if (keysym == XK_l)
                 {

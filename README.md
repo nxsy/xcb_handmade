@@ -55,12 +55,26 @@ Build!
     sh build.sh
 
 Don’t forget to install the assets (separate Handmade Hero download) into the
-data/ directory.  Currently that would create a data/test directory at the
-moment.
+data/ directory.  Currently that would create data/test and data/test2
+directories at the moment.
+
+You can then create symlink's to the data/test* directories from build/debug
+and build/opt to be able to run the binaries in place with textures.
+
+	cd build/debug
+	ls -s ../../data/test .
+	ls -s ../../data/test2 .
+
+	cd build/opt
+	ls -s ../../data/test .
+	ls -s ../../data/test2 .
 
 Run!
 
-    build/xcb_handmade
+    build/debug/xcb_handmade
+or
+    build/opt/xcb_handmade
+
 
 You can use WASD for movement (or the XBox 360 D-pad), and Up Arrow (or the Y
 button on the XBox 360 controller) to sprint.

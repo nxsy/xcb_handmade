@@ -952,8 +952,10 @@ main()
 #define START_HEIGHT 540
 
     context.window = xcb_generate_id(context.connection);
+	// NOTE: changed to not have a border width, so the min/max/close
+	// buttons align on compiz, maybe other window managers
     xcb_create_window(context.connection, XCB_COPY_FROM_PARENT, context.window,
-            screen->root, 0, 0, START_WIDTH, START_HEIGHT, 10,
+            screen->root, 0, 0, START_WIDTH, START_HEIGHT, 0,
             XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 
     xcb_icccm_set_wm_name(context.connection, context.window, XCB_ATOM_STRING,

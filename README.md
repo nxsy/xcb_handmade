@@ -84,7 +84,7 @@ button on the XBox 360 controller) to sprint.
 Implementation progress
 -----------------------
 
-We currently have parity with Handmade Hero Day 38!
+We currently have parity with Handmade Hero Day 120!
 
 Completed (at least partially) so far:
 

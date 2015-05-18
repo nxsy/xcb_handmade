@@ -1137,7 +1137,7 @@ main()
 
         // NOTE: modify "game_buffer.Memory" to invert image
 #if 1
-        int32 lineStore[game_buffer.Width*game_buffer.Height] = {};
+        int32 lineStore[game_buffer.Width] = {};
         int32* currentPixel = (int32*)game_buffer.Memory;
         int32* currentLine = currentPixel;
         int32* swapLine = currentLine +
@@ -1149,9 +1149,9 @@ main()
             swapPixel = swapLine;
             for(int X = 0; X < game_buffer.Width; ++X)
             {
-                lineStore[(Y*game_buffer.Width)+X] = *currentPixel;
+                lineStore[X] = *currentPixel;
                 *currentPixel = *swapPixel;
-                *swapPixel = *(lineStore + ((Y*game_buffer.Width)+X));
+                *swapPixel = *(lineStore + X);
 
                 ++currentPixel;
                 ++swapPixel;

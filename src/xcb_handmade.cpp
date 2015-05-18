@@ -1165,6 +1165,10 @@ main()
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
         xcb_flush(context.connection);
 
+        // NOTE: clear "game_buffer.Memory" to zero after setting the pixmap
+        memset(game_buffer.Memory, 0x00,
+			   (game_buffer.Width*game_buffer.Height*buffer.bytes_per_pixel));
+		
         timespec target_counter = {};
         target_counter.tv_sec = last_counter.tv_sec;
         target_counter.tv_nsec = last_counter.tv_nsec + target_nanoseconds_per_frame;

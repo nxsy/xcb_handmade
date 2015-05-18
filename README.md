@@ -103,7 +103,7 @@ after switching on IACA in handmade_render_group.cpp and compiling.
 Implementation progress
 -----------------------
 
-We currently have parity with Handmade Hero Day 120!
+We currently have parity with Handmade Hero Day 121!
 
 Completed (at least partially) so far:
 

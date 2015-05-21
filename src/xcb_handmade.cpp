@@ -1071,11 +1071,17 @@ main()
             break;
         }
 
+		// NOTE: setup game_buffer.Memory upside down and set
+		// game_buffer.pitch negative, so the game would fill the
+		// backbuffer upside down. XCB doesn't seem to have an
+		// option to flip the image.
+		
         game_offscreen_buffer game_buffer = {};
-        game_buffer.Memory = buffer.xcb_image->data;
+        game_buffer.Memory = ((uint8*)buffer.xcb_image->data)+
+			(buffer.width*(buffer.height-1)*buffer.bytes_per_pixel);
         game_buffer.Width = buffer.width;
         game_buffer.Height = buffer.height;
-        game_buffer.Pitch = buffer.pitch;
+        game_buffer.Pitch = -buffer.pitch;
 
         if (state.recording_index)
         {
@@ -1135,39 +1141,9 @@ main()
             }
         }
 
-        // NOTE: modify "game_buffer.Memory" to invert image
-#if 1
-        int32 lineStore[game_buffer.Width] = {};
-        int32* currentPixel = (int32*)game_buffer.Memory;
-        int32* currentLine = currentPixel;
-        int32* swapLine = currentLine +
-            (game_buffer.Height-1)*game_buffer.Width;
-        int32* swapPixel = swapLine;
-        for(int Y = 0; Y < game_buffer.Height*.5; ++Y)
-        {
-            currentPixel = currentLine;
-            swapPixel = swapLine;
-            for(int X = 0; X < game_buffer.Width; ++X)
-            {
-                lineStore[X] = *currentPixel;
-                *currentPixel = *swapPixel;
-                *swapPixel = *(lineStore + X);
-
-                ++currentPixel;
-                ++swapPixel;
-            }
-            currentLine += game_buffer.Width;
-            swapLine -= game_buffer.Width;
-        }
-#endif
-
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
         xcb_flush(context.connection);
-
-        // NOTE: clear "game_buffer.Memory" to zero after setting the pixmap
-        memset(game_buffer.Memory, 0x00,
-			   (game_buffer.Width*game_buffer.Height*buffer.bytes_per_pixel));
 		
         timespec target_counter = {};
         target_counter.tv_sec = last_counter.tv_sec;

@@ -272,6 +272,7 @@ HandleDebugCycleCounter(game_memory* m)
 			Counter->HitCount = 0;
 			Counter->CycleCount = 0;
 		}
+		fflush(stdout);
 	}
 #endif
 }
@@ -1034,7 +1035,6 @@ main()
 
     hhxcb_init_replays(&state);
 
-    bool ending = 0;
     timespec last_counter = {};
     timespec flip_wall_clock = {}; // Actually monotonic clock
     clock_gettime(HHXCB_CLOCK, &last_counter);
@@ -1046,7 +1046,7 @@ main()
 
     int64_t next_controller_refresh = 0;
 
-    while(!ending)
+    while(!context.ending_flag)
     {
         if (last_counter.tv_sec >= next_controller_refresh)
         {
@@ -1065,11 +1065,6 @@ main()
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, new_input, old_input);
-
-        if (context.ending_flag)
-        {
-            break;
-        }
 
 		// NOTE: setup game_buffer.Memory upside down and set
 		// game_buffer.pitch negative, so the game would fill the

@@ -37,6 +37,7 @@
 #include <string.h>   // strlen (I'm so lazy)
 #include <time.h>     // clock_gettime, CLOCK_MONOTONIC
 #include <unistd.h>   // readlink
+#include <pthread.h>  // threads
 
 #include <xcb/xcb.h>
 
@@ -920,6 +921,52 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_hw_params(context->handle, hwparams);
     snd_pcm_dump(context->handle, context->alsa_log);
 }
+
+struct work_queue_entry
+{
+	char* StringToPrint;
+};
+
+global_variable uint32 NextEntryToDo;
+global_variable uint32 EntryCount;
+work_queue_entry Entries[256];
+
+internal void
+PushString(char* String)
+{
+	Assert(EntryCount < ArrayCount(Entries));
+    // TODO: these writes are not in order
+	work_queue_entry* Entry = Entries + EntryCount++;
+	Entry->StringToPrint = String;
+}
+
+struct hhxcb_thread_info
+{
+	uint32 LogicalThreadIndex;
+};
+
+void*
+ThreadFunction(void* arg)
+{
+	hhxcb_thread_info* ThreadInfo = (hhxcb_thread_info*)arg;
+	
+	for(;;)
+	{
+		if(NextEntryToDo < EntryCount)
+		{
+            // TODO: this line is not interlocked, so two threads could see
+			// the same value
+            // TODO: compiler doesn't know that multiple threads could write
+			// this value
+			uint32 EntryIndex = NextEntryToDo++;
+			// TODO: these reads are not in order
+			work_queue_entry* Entry = Entries + EntryIndex;
+			printf("thread %u: %s\n", ThreadInfo->LogicalThreadIndex,
+				   Entry->StringToPrint);
+		}
+	}
+}
+
 int
 main()
 {
@@ -1018,6 +1065,32 @@ main()
     int16 *sample_buffer = (int16 *)malloc(sound_output.secondary_buffer_size);
 
     thread_context t = {};
+
+	hhxcb_thread_info ThreadInfo[16] = {};
+		
+	for(uint32 ThreadIndex = 0;
+		ThreadIndex < ArrayCount(ThreadInfo);
+		++ThreadIndex)
+	{
+		hhxcb_thread_info* Info = ThreadInfo + ThreadIndex;
+
+		Info->LogicalThreadIndex = ThreadIndex;
+		pthread_t thread = {};
+		pthread_attr_t attr = {};
+		pthread_attr_init(&attr);
+		pthread_create(&thread, &attr, &ThreadFunction, Info);
+	}
+
+	PushString("String 0");
+	PushString("String 1");
+	PushString("String 2");
+	PushString("String 3");
+	PushString("String 4");
+	PushString("String 5");
+	PushString("String 6");
+	PushString("String 7");
+	PushString("String 8");
+	PushString("String 9");
 
     game_memory m = {};
     m.PermanentStorageSize = 256 * 1024 * 1024;

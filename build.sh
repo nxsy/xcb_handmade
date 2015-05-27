@@ -4,7 +4,7 @@ set -e
 set -u
 
 XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lasound"
-CPPFLAGS="-I../iaca/include/ -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
+CPPFLAGS="-pthread -I../iaca/include/ -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 WARNFLAGS="-Wall -Wno-unused-variable -Wno-unused-but-set-variable\
 	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing"
 GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"

@@ -37,8 +37,11 @@
 #include <string.h>   // strlen (I'm so lazy)
 #include <time.h>     // clock_gettime, CLOCK_MONOTONIC
 #include <unistd.h>   // readlink
-#include <pthread.h>  // threads
-
+#include <pthread.h>  // pthread_create, pthread_attr_init
+#include <semaphore.h>// sem_init, sem_post, sem_wait, sem_destroy
+// Note: this gives a compiler error for "_Atomic"
+//#include <stdatomic.h>// atomic_fetch_add, etc...
+	
 #include <xcb/xcb.h>
 
 /*
@@ -927,21 +930,34 @@ struct work_queue_entry
 	char* StringToPrint;
 };
 
-global_variable uint32 NextEntryToDo;
-global_variable uint32 EntryCount;
+
+global_variable uint32 volatile EntryCompletionCount;
+global_variable uint32 volatile NextEntryToDo;
+global_variable uint32 volatile EntryCount;
 work_queue_entry Entries[256];
 
+// TODO: check read/write ordering on the cpu
+#define CompletePastWritesBeforeFutureWrites _mm_sfence()
+#define CompletePastReadsBeforeFutureReads _mm_lfence()
+
 internal void
-PushString(char* String)
+PushString(sem_t* SemaphoreHandle, char* String)
 {
 	Assert(EntryCount < ArrayCount(Entries));
-    // TODO: these writes are not in order
-	work_queue_entry* Entry = Entries + EntryCount++;
+
+	work_queue_entry* Entry = Entries + EntryCount;
 	Entry->StringToPrint = String;
+
+	CompletePastWritesBeforeFutureWrites;
+	
+	++EntryCount;
+
+	sem_post(SemaphoreHandle);
 }
 
 struct hhxcb_thread_info
 {
+	sem_t* SemaphoreHandle;
 	uint32 LogicalThreadIndex;
 };
 
@@ -954,15 +970,22 @@ ThreadFunction(void* arg)
 	{
 		if(NextEntryToDo < EntryCount)
 		{
-            // TODO: this line is not interlocked, so two threads could see
-			// the same value
-            // TODO: compiler doesn't know that multiple threads could write
-			// this value
-			uint32 EntryIndex = NextEntryToDo++;
+			// NOTE: apparently the "__sync*" compiler intrinsics are
+			// supported in gcc and clang
+			uint32 EntryIndex = __sync_fetch_and_add(&NextEntryToDo, 1);
+
+			CompletePastReadsBeforeFutureReads;
+			
 			// TODO: these reads are not in order
 			work_queue_entry* Entry = Entries + EntryIndex;
 			printf("thread %u: %s\n", ThreadInfo->LogicalThreadIndex,
 				   Entry->StringToPrint);
+
+			__sync_fetch_and_add(&EntryCompletionCount, 1);
+		}
+		else
+		{
+			sem_wait(ThreadInfo->SemaphoreHandle);
 		}
 	}
 }
@@ -1067,13 +1090,18 @@ main()
     thread_context t = {};
 
 	hhxcb_thread_info ThreadInfo[16] = {};
-		
+
+	uint32 InitialCount = 0;
+	sem_t SemaphoreHandle = {};
+	sem_init(&SemaphoreHandle, 0, InitialCount);
+	
 	for(uint32 ThreadIndex = 0;
 		ThreadIndex < ArrayCount(ThreadInfo);
 		++ThreadIndex)
 	{
 		hhxcb_thread_info* Info = ThreadInfo + ThreadIndex;
 
+		Info->SemaphoreHandle = &SemaphoreHandle;
 		Info->LogicalThreadIndex = ThreadIndex;
 		pthread_t thread = {};
 		pthread_attr_t attr = {};
@@ -1081,16 +1109,32 @@ main()
 		pthread_create(&thread, &attr, &ThreadFunction, Info);
 	}
 
-	PushString("String 0");
-	PushString("String 1");
-	PushString("String 2");
-	PushString("String 3");
-	PushString("String 4");
-	PushString("String 5");
-	PushString("String 6");
-	PushString("String 7");
-	PushString("String 8");
-	PushString("String 9");
+	PushString(&SemaphoreHandle, "String A0");
+	PushString(&SemaphoreHandle, "String A1");
+	PushString(&SemaphoreHandle, "String A2");
+	PushString(&SemaphoreHandle, "String A3");
+	PushString(&SemaphoreHandle, "String A4");
+	PushString(&SemaphoreHandle, "String A5");
+	PushString(&SemaphoreHandle, "String A6");
+	PushString(&SemaphoreHandle, "String A7");
+	PushString(&SemaphoreHandle, "String A8");
+	PushString(&SemaphoreHandle, "String A9");
+
+	sleep(5);
+	
+	PushString(&SemaphoreHandle, "String B0");
+	PushString(&SemaphoreHandle, "String B1");
+	PushString(&SemaphoreHandle, "String B2");
+	PushString(&SemaphoreHandle, "String B3");
+	PushString(&SemaphoreHandle, "String B4");
+	PushString(&SemaphoreHandle, "String B5");
+	PushString(&SemaphoreHandle, "String B6");
+	PushString(&SemaphoreHandle, "String B7");
+	PushString(&SemaphoreHandle, "String B8");
+	PushString(&SemaphoreHandle, "String B9");
+	
+	// TODO turn this into something waitable
+    while(EntryCount != EntryCompletionCount);
 
     game_memory m = {};
     m.PermanentStorageSize = 256 * 1024 * 1024;

@@ -925,69 +925,109 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_dump(context->handle, context->alsa_log);
 }
 
-struct work_queue_entry
+struct work_queue_entry_storage
 {
-	char* StringToPrint;
+	void* UserPointer;
 };
 
+struct work_queue
+{
+	uint32 volatile EntryCompletionCount;
+	uint32 volatile NextEntryToDo;
+	uint32 volatile EntryCount;
 
-global_variable uint32 volatile EntryCompletionCount;
-global_variable uint32 volatile NextEntryToDo;
-global_variable uint32 volatile EntryCount;
-work_queue_entry Entries[256];
+	sem_t* SemaphoreHandle;
+	
+	work_queue_entry_storage Entries[256];
+};
 
-// TODO: check read/write ordering on the cpu
-#define CompletePastWritesBeforeFutureWrites _mm_sfence()
-#define CompletePastReadsBeforeFutureReads _mm_lfence()
+struct work_queue_entry
+{
+	void* Data;
+	bool32 IsValid;
+};
 
 internal void
-PushString(sem_t* SemaphoreHandle, char* String)
+AddWorkQueueEntry(work_queue* Queue, void* Pointer)
 {
-	Assert(EntryCount < ArrayCount(Entries));
+	Assert(Queue->EntryCount < ArrayCount(Queue->Entries));
+	Queue->Entries[Queue->EntryCount].UserPointer = Pointer;
+	_mm_sfence();
+	++Queue->EntryCount;
+	sem_post(Queue->SemaphoreHandle);
+}
 
-	work_queue_entry* Entry = Entries + EntryCount;
-	Entry->StringToPrint = String;
 
-	CompletePastWritesBeforeFutureWrites;
+internal work_queue_entry
+CompleteAndGetNextWorkQueueEntry(work_queue* Queue, work_queue_entry Completed)
+{
+	work_queue_entry Result;
+	Result.IsValid = false;
+
+	if(Completed.IsValid)
+	{
+		__sync_fetch_and_add(&Queue->EntryCompletionCount, 1);
+	}
 	
-	++EntryCount;
+	if(Queue->NextEntryToDo < Queue->EntryCount)
+	{
+		// NOTE: apparently the "__sync*" compiler intrinsics are
+		// supported in gcc and clang
+		uint32 Index = __sync_fetch_and_add(&Queue->NextEntryToDo, 1);
+		Result.Data = Queue->Entries[Index].UserPointer;
+		Result.IsValid = true;
+		
+		_mm_lfence();
+	}
+	return(Result);
+}
 
-	sem_post(SemaphoreHandle);
+internal bool32
+QueueWorkStillInProgress(work_queue* Queue)
+{
+	bool32 Result = (Queue->EntryCount != Queue->EntryCompletionCount);
+	return(Result);
+}
+
+inline void
+DoWorkerWork(work_queue_entry Entry, uint32 LogicalThreadIndex)
+{
+	Assert(Entry.IsValid);
+	
+	printf("thread %u: %s\n", LogicalThreadIndex,
+		   (char*)Entry.Data);
 }
 
 struct hhxcb_thread_info
 {
-	sem_t* SemaphoreHandle;
 	uint32 LogicalThreadIndex;
+	work_queue* Queue;
 };
 
 void*
 ThreadFunction(void* arg)
 {
 	hhxcb_thread_info* ThreadInfo = (hhxcb_thread_info*)arg;
-	
+
+	work_queue_entry Entry = {};
 	for(;;)
 	{
-		if(NextEntryToDo < EntryCount)
+		Entry = CompleteAndGetNextWorkQueueEntry(ThreadInfo->Queue, Entry);
+		if(Entry.IsValid)
 		{
-			// NOTE: apparently the "__sync*" compiler intrinsics are
-			// supported in gcc and clang
-			uint32 EntryIndex = __sync_fetch_and_add(&NextEntryToDo, 1);
-
-			CompletePastReadsBeforeFutureReads;
-			
-			// TODO: these reads are not in order
-			work_queue_entry* Entry = Entries + EntryIndex;
-			printf("thread %u: %s\n", ThreadInfo->LogicalThreadIndex,
-				   Entry->StringToPrint);
-
-			__sync_fetch_and_add(&EntryCompletionCount, 1);
+			DoWorkerWork(Entry, ThreadInfo->LogicalThreadIndex);
 		}
 		else
 		{
-			sem_wait(ThreadInfo->SemaphoreHandle);
+			sem_wait(ThreadInfo->Queue->SemaphoreHandle);
 		}
 	}
+}
+
+internal void
+PushString(work_queue* Queue, char* String)
+{
+	AddWorkQueueEntry(Queue, String);
 }
 
 int
@@ -1089,11 +1129,16 @@ main()
 
     thread_context t = {};
 
-	hhxcb_thread_info ThreadInfo[16] = {};
+	hhxcb_thread_info ThreadInfo[15] = {};
 
+	work_queue Queue = {};
+	
 	uint32 InitialCount = 0;
+
+	// NOTE: "sem_init" has an error if it is passed "Queue.SemaphoreHandle"
 	sem_t SemaphoreHandle = {};
 	sem_init(&SemaphoreHandle, 0, InitialCount);
+	Queue.SemaphoreHandle = &SemaphoreHandle;
 	
 	for(uint32 ThreadIndex = 0;
 		ThreadIndex < ArrayCount(ThreadInfo);
@@ -1101,7 +1146,7 @@ main()
 	{
 		hhxcb_thread_info* Info = ThreadInfo + ThreadIndex;
 
-		Info->SemaphoreHandle = &SemaphoreHandle;
+		Info->Queue = &Queue;
 		Info->LogicalThreadIndex = ThreadIndex;
 		pthread_t thread = {};
 		pthread_attr_t attr = {};
@@ -1109,32 +1154,37 @@ main()
 		pthread_create(&thread, &attr, &ThreadFunction, Info);
 	}
 
-	PushString(&SemaphoreHandle, "String A0");
-	PushString(&SemaphoreHandle, "String A1");
-	PushString(&SemaphoreHandle, "String A2");
-	PushString(&SemaphoreHandle, "String A3");
-	PushString(&SemaphoreHandle, "String A4");
-	PushString(&SemaphoreHandle, "String A5");
-	PushString(&SemaphoreHandle, "String A6");
-	PushString(&SemaphoreHandle, "String A7");
-	PushString(&SemaphoreHandle, "String A8");
-	PushString(&SemaphoreHandle, "String A9");
+	PushString(&Queue, "String A0");
+	PushString(&Queue, "String A1");
+	PushString(&Queue, "String A2");
+	PushString(&Queue, "String A3");
+	PushString(&Queue, "String A4");
+	PushString(&Queue, "String A5");
+	PushString(&Queue, "String A6");
+	PushString(&Queue, "String A7");
+	PushString(&Queue, "String A8");
+	PushString(&Queue, "String A9");
+	
+	PushString(&Queue, "String B0");
+	PushString(&Queue, "String B1");
+	PushString(&Queue, "String B2");
+	PushString(&Queue, "String B3");
+	PushString(&Queue, "String B4");
+	PushString(&Queue, "String B5");
+	PushString(&Queue, "String B6");
+	PushString(&Queue, "String B7");
+	PushString(&Queue, "String B8");
+	PushString(&Queue, "String B9");
 
-	sleep(5);
-	
-	PushString(&SemaphoreHandle, "String B0");
-	PushString(&SemaphoreHandle, "String B1");
-	PushString(&SemaphoreHandle, "String B2");
-	PushString(&SemaphoreHandle, "String B3");
-	PushString(&SemaphoreHandle, "String B4");
-	PushString(&SemaphoreHandle, "String B5");
-	PushString(&SemaphoreHandle, "String B6");
-	PushString(&SemaphoreHandle, "String B7");
-	PushString(&SemaphoreHandle, "String B8");
-	PushString(&SemaphoreHandle, "String B9");
-	
-	// TODO turn this into something waitable
-    while(EntryCount != EntryCompletionCount);
+	work_queue_entry Entry = {};
+    while(QueueWorkStillInProgress(&Queue))
+	{
+		Entry = CompleteAndGetNextWorkQueueEntry(&Queue, Entry);
+		if(Entry.IsValid)
+		{
+			DoWorkerWork(Entry, 15);
+		}
+	}
 
     game_memory m = {};
     m.PermanentStorageSize = 256 * 1024 * 1024;

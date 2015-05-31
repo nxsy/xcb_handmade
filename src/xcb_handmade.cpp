@@ -37,7 +37,7 @@
 #include <string.h>   // strlen (I'm so lazy)
 #include <time.h>     // clock_gettime, CLOCK_MONOTONIC
 #include <unistd.h>   // readlink
-#include <pthread.h>  // pthread_create, pthread_attr_init
+#include <pthread.h>  // pthread_create, pthread_attr_init, pthread_self
 #include <semaphore.h>// sem_init, sem_post, sem_wait, sem_destroy
 // Note: this gives a compiler error for "_Atomic"
 //#include <stdatomic.h>// atomic_fetch_add, etc...
@@ -925,83 +925,86 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_dump(context->handle, context->alsa_log);
 }
 
-struct work_queue_entry_storage
+struct platform_work_queue_entry
 {
-	void* UserPointer;
+	platform_work_queue_callback* Callback;
+	void* Data;
 };
 
-struct work_queue
+struct platform_work_queue
 {
-	uint32 volatile EntryCompletionCount;
-	uint32 volatile NextEntryToDo;
-	uint32 volatile EntryCount;
+	uint32 volatile CompletionGoal;
+	uint32 volatile CompletionCount;
+	uint32 volatile NextEntryToWrite;
+	uint32 volatile NextEntryToRead;
 
 	sem_t* SemaphoreHandle;
 	
-	work_queue_entry_storage Entries[256];
-};
-
-struct work_queue_entry
-{
-	void* Data;
-	bool32 IsValid;
+	platform_work_queue_entry Entries[256];
 };
 
 internal void
-AddWorkQueueEntry(work_queue* Queue, void* Pointer)
+hhxcbAddEntry(platform_work_queue* Queue, platform_work_queue_callback*
+			  Callback, void* Data)
 {
-	Assert(Queue->EntryCount < ArrayCount(Queue->Entries));
-	Queue->Entries[Queue->EntryCount].UserPointer = Pointer;
+	// TODO: switch to "__sync_bool_compare_and_swap" so any thread can add
+	uint32 NewNextEntryToWrite = (Queue->NextEntryToWrite + 1) %
+		ArrayCount(Queue->Entries);
+	Assert(NewNextEntryToWrite != Queue->NextEntryToRead);
+	platform_work_queue_entry* Entry = Queue->Entries + Queue->NextEntryToWrite;
+	Entry->Callback = Callback;
+	Entry->Data = Data;
+	++Queue->CompletionGoal;
 	_mm_sfence();
-	++Queue->EntryCount;
+	Queue->NextEntryToWrite = NewNextEntryToWrite;
 	sem_post(Queue->SemaphoreHandle);
 }
 
-
-internal work_queue_entry
-CompleteAndGetNextWorkQueueEntry(work_queue* Queue, work_queue_entry Completed)
+internal bool32
+hhxcbDoNextWorkQueueEntry(platform_work_queue* Queue)
 {
-	work_queue_entry Result;
-	Result.IsValid = false;
+	bool32 WeShouldSleep = false;
 
-	if(Completed.IsValid)
-	{
-		__sync_fetch_and_add(&Queue->EntryCompletionCount, 1);
-	}
-	
-	if(Queue->NextEntryToDo < Queue->EntryCount)
+	uint32 OriginalNextEntryToRead = Queue->NextEntryToRead;
+	uint32 NewNextEntryToRead = (OriginalNextEntryToRead + 1) %
+		ArrayCount(Queue->Entries);
+	if(OriginalNextEntryToRead != Queue->NextEntryToWrite)
 	{
 		// NOTE: apparently the "__sync*" compiler intrinsics are
 		// supported in gcc and clang
-		uint32 Index = __sync_fetch_and_add(&Queue->NextEntryToDo, 1);
-		Result.Data = Queue->Entries[Index].UserPointer;
-		Result.IsValid = true;
-		
-		_mm_lfence();
+		if(__sync_bool_compare_and_swap(&Queue->NextEntryToRead,
+										OriginalNextEntryToRead,
+										(NewNextEntryToRead)))
+		{
+			platform_work_queue_entry Entry =
+				Queue->Entries[OriginalNextEntryToRead];
+			Entry.Callback(Queue, Entry.Data); 
+			__sync_fetch_and_add(&Queue->CompletionCount, 1);
+		}
 	}
-	return(Result);
+	else
+	{
+		WeShouldSleep = true;
+	}
+	return WeShouldSleep;
 }
 
-internal bool32
-QueueWorkStillInProgress(work_queue* Queue)
+internal void
+hhxcbCompleteAllWork(platform_work_queue* Queue)
 {
-	bool32 Result = (Queue->EntryCount != Queue->EntryCompletionCount);
-	return(Result);
-}
-
-inline void
-DoWorkerWork(work_queue_entry Entry, uint32 LogicalThreadIndex)
-{
-	Assert(Entry.IsValid);
-	
-	printf("thread %u: %s\n", LogicalThreadIndex,
-		   (char*)Entry.Data);
+	platform_work_queue_entry Entry = {};
+    while(Queue->CompletionGoal != Queue->CompletionCount)
+	{
+		hhxcbDoNextWorkQueueEntry(Queue);
+	}
+	Queue->CompletionCount = 0;
+	Queue->CompletionGoal = 0;
 }
 
 struct hhxcb_thread_info
 {
 	uint32 LogicalThreadIndex;
-	work_queue* Queue;
+	platform_work_queue* Queue;
 };
 
 void*
@@ -1009,25 +1012,19 @@ ThreadFunction(void* arg)
 {
 	hhxcb_thread_info* ThreadInfo = (hhxcb_thread_info*)arg;
 
-	work_queue_entry Entry = {};
 	for(;;)
 	{
-		Entry = CompleteAndGetNextWorkQueueEntry(ThreadInfo->Queue, Entry);
-		if(Entry.IsValid)
-		{
-			DoWorkerWork(Entry, ThreadInfo->LogicalThreadIndex);
-		}
-		else
+		if(hhxcbDoNextWorkQueueEntry(ThreadInfo->Queue))
 		{
 			sem_wait(ThreadInfo->Queue->SemaphoreHandle);
 		}
 	}
 }
 
-internal void
-PushString(work_queue* Queue, char* String)
-{
-	AddWorkQueueEntry(Queue, String);
+internal PLATFORM_WORK_QUEUE_CALLBACK(DoWorkerWork)
+{	
+	printf("thread %lu: %s\n", pthread_self(),
+		   (char*)Data);
 }
 
 int
@@ -1070,7 +1067,7 @@ main()
     context.fmt = hhxcb_find_format(&context, 32, 24, 32);
 
     int monitor_refresh_hz = 60;
-    real32 game_update_hz = (monitor_refresh_hz / 2.0f); // Should almost always be an int...
+    real32 game_update_hz = monitor_refresh_hz;// / 2.0f); // Should almost always be an int...
     long target_nanoseconds_per_frame = (1000 * 1000 * 1000) / game_update_hz;
 
 
@@ -1085,9 +1082,12 @@ main()
             ,
     };
 
-#define START_WIDTH 960
-#define START_HEIGHT 540
+//#define START_WIDTH 960
+//#define START_HEIGHT 540
 
+#define START_WIDTH 1920
+#define START_HEIGHT 1080
+	
     context.window = xcb_generate_id(context.connection);
 	// NOTE: changed to not have a border width, so the min/max/close
 	// buttons align on compiz, maybe other window managers
@@ -1131,7 +1131,7 @@ main()
 
 	hhxcb_thread_info ThreadInfo[15] = {};
 
-	work_queue Queue = {};
+	platform_work_queue Queue = {};
 	
 	uint32 InitialCount = 0;
 
@@ -1154,37 +1154,30 @@ main()
 		pthread_create(&thread, &attr, &ThreadFunction, Info);
 	}
 
-	PushString(&Queue, "String A0");
-	PushString(&Queue, "String A1");
-	PushString(&Queue, "String A2");
-	PushString(&Queue, "String A3");
-	PushString(&Queue, "String A4");
-	PushString(&Queue, "String A5");
-	PushString(&Queue, "String A6");
-	PushString(&Queue, "String A7");
-	PushString(&Queue, "String A8");
-	PushString(&Queue, "String A9");
+	// NOTE: find better way to avoid "const" error
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A0");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A1");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A2");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A3");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A4");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A5");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A6");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A7");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A8");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A9");
 	
-	PushString(&Queue, "String B0");
-	PushString(&Queue, "String B1");
-	PushString(&Queue, "String B2");
-	PushString(&Queue, "String B3");
-	PushString(&Queue, "String B4");
-	PushString(&Queue, "String B5");
-	PushString(&Queue, "String B6");
-	PushString(&Queue, "String B7");
-	PushString(&Queue, "String B8");
-	PushString(&Queue, "String B9");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B0");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B1");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B2");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B3");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B4");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B5");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B6");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B7");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B8");
+	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B9");
 
-	work_queue_entry Entry = {};
-    while(QueueWorkStillInProgress(&Queue))
-	{
-		Entry = CompleteAndGetNextWorkQueueEntry(&Queue, Entry);
-		if(Entry.IsValid)
-		{
-			DoWorkerWork(Entry, 15);
-		}
-	}
+	hhxcbCompleteAllWork(&Queue);
 
     game_memory m = {};
     m.PermanentStorageSize = 256 * 1024 * 1024;
@@ -1194,6 +1187,9 @@ main()
     m.PermanentStorage = (uint8 *)state.game_memory_block;
     m.TransientStorage =
         (uint8_t *)m.PermanentStorage + m.TransientStorageSize;
+	m.HighPriorityQueue = &Queue;
+	m.PlatformAddEntry = hhxcbAddEntry;
+	m.PlatformCompleteAllWork = hhxcbCompleteAllWork;
 #ifdef HANDMADE_INTERNAL
     m.DEBUGPlatformFreeFileMemory = debug_xcb_free_file_memory;
     m.DEBUGPlatformReadEntireFile = debug_xcb_read_entire_file;
@@ -1213,6 +1209,7 @@ main()
 
     int64_t next_controller_refresh = 0;
 
+	uint64 LastCycleCount = __rdtsc();
     while(!context.ending_flag)
     {
         if (last_counter.tv_sec >= next_controller_refresh)
@@ -1371,6 +1368,18 @@ main()
         game_input *temp_input = new_input;
         new_input = old_input;
         old_input = temp_input;
+
+#if 1
+		uint64 EndCycleCount = __rdtsc();
+		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
+		LastCycleCount = EndCycleCount;
+                    
+		real64 FPS = 1000.0f / ms_per_frame;
+		real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
+
+		printf("%.02fms/f,  %.02ff/s,  %.02fmc/f\n", ms_per_frame, FPS, MCPF);
+#endif
+
     }
 
     snd_pcm_close(context.handle);

@@ -120,9 +120,11 @@ xcb_format_t *hhxcb_find_format(hhxcb_context *context, uint32_t pad, uint32_t d
     return (xcb_format_t *)0;
 }
 
-xcb_image_t *hhxcb_create_image(uint32_t width, uint32_t height, xcb_format_t *fmt, const xcb_setup_t *setup)
+xcb_image_t *
+hhxcb_create_image(uint32_t pitch, uint32_t width, uint32_t height,
+				   xcb_format_t *fmt, const xcb_setup_t *setup)
 {
-    size_t image_size = width * height * (fmt->bits_per_pixel / 8);
+    size_t image_size = pitch * height;
     uint8_t *image_data = (uint8_t *)malloc(image_size);
 
      return xcb_image_create(width, height, XCB_IMAGE_FORMAT_Z_PIXMAP,
@@ -153,10 +155,11 @@ hhxcb_resize_backbuffer(hhxcb_context *context, hhxcb_offscreen_buffer *buffer, 
     buffer->width = width;
     buffer->height = height;
     buffer->bytes_per_pixel = context->fmt->bits_per_pixel / 8;
-    buffer->pitch = buffer->bytes_per_pixel * width;
+	// NOTE: round the pitch up to a sixteen byte boundary
+    buffer->pitch = Align16(buffer->bytes_per_pixel * width);
 
-    buffer->xcb_image = hhxcb_create_image(width, height, context->fmt,
-            context->setup);
+    buffer->xcb_image = hhxcb_create_image(buffer->pitch, width, height,
+										   context->fmt, context->setup);
     buffer->memory = buffer->xcb_image->data;
 
     buffer->xcb_pixmap_id = xcb_generate_id(context->connection);
@@ -1055,9 +1058,10 @@ main()
      * We have to be careful and clean up at the end.  If we crash, auto-repeat
      * is left off.
      */
+	// NOTE: not doing this doesn't seem to break anything
     {
-        uint32_t values[1] = {XCB_AUTO_REPEAT_MODE_OFF};
-        xcb_change_keyboard_control(context.connection, XCB_KB_AUTO_REPEAT_MODE, values);
+        //uint32_t values[1] = {XCB_AUTO_REPEAT_MODE_OFF};
+		// xcb_change_keyboard_control(context.connection, XCB_KB_AUTO_REPEAT_MODE, values);
     }
 
     load_atoms(&context);
@@ -1237,7 +1241,7 @@ main()
 		
         game_offscreen_buffer game_buffer = {};
         game_buffer.Memory = ((uint8*)buffer.xcb_image->data)+
-			(buffer.width*(buffer.height-1)*buffer.bytes_per_pixel);
+			(buffer.pitch*(buffer.height-1));
         game_buffer.Width = buffer.width;
         game_buffer.Height = buffer.height;
         game_buffer.Pitch = -buffer.pitch;
@@ -1387,8 +1391,8 @@ main()
     // NOTE(nbm): Since auto-repeat seems to be a X-wide thing, let's be nice
     // and return it to where it was before?
     {
-        uint32_t values[1] = {XCB_AUTO_REPEAT_MODE_DEFAULT};
-        xcb_change_keyboard_control(context.connection, XCB_KB_AUTO_REPEAT_MODE, values);
+        //uint32_t values[1] = {XCB_AUTO_REPEAT_MODE_DEFAULT};
+        //xcb_change_keyboard_control(context.connection, XCB_KB_AUTO_REPEAT_MODE, values);
     }
 
     xcb_flush(context.connection);

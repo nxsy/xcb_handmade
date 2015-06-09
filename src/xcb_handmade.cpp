@@ -921,8 +921,6 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *sound_output)
     snd_pcm_hw_params_set_channels(context->handle, hwparams, 2);
     snd_pcm_hw_params_set_rate(context->handle, hwparams, sound_output->samples_per_second, 0);
     snd_pcm_hw_params_set_period_size(context->handle, hwparams, sound_output->samples_per_second / 60, 0);
-    // NOTE: restricting this buffer size too much seems to crash the game
-    sound_output->secondary_buffer_size = 48000 / 2;
     snd_pcm_hw_params_set_buffer_size(context->handle, hwparams, sound_output->secondary_buffer_size);
     snd_pcm_hw_params(context->handle, hwparams);
     snd_pcm_dump(context->handle, context->alsa_log);
@@ -1078,7 +1076,7 @@ main()
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
     uint32_t values[2] =
     {
-        0x0000ffff, //screen->black_pixel,
+        screen->black_pixel, //0x0000ffff,
         0
             | XCB_EVENT_MASK_POINTER_MOTION
             | XCB_EVENT_MASK_KEY_PRESS
@@ -1086,11 +1084,13 @@ main()
             ,
     };
 
-//#define START_WIDTH 960
-//#define START_HEIGHT 540
-
+#if 0
+#define START_WIDThH 960
+#define START_HEIGHT 540
+#else
 #define START_WIDTH 1920
 #define START_HEIGHT 1080
+#endif
 	
     context.window = xcb_generate_id(context.connection);
 	// NOTE: changed to not have a border width, so the min/max/close
@@ -1102,7 +1102,8 @@ main()
     xcb_icccm_set_wm_name(context.connection, context.window, XCB_ATOM_STRING,
             8, strlen("hello"), "hello");
 
-    load_and_set_cursor(&context);
+	// Note: disabling this so the default cursor is used
+	//load_and_set_cursor(&context);
 
     xcb_map_window(context.connection, context.window);
     xcb_atom_t protocols[] =

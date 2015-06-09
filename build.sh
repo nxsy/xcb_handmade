@@ -6,7 +6,7 @@ set -u
 XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lasound"
 CPPFLAGS="-pthread -I../iaca/include/ -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 WARNFLAGS="-Wall -Wno-unused-variable -Wno-unused-but-set-variable\
-	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing"
+	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing -Wno-switch"
 GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"
 DEBUG_FLAGS="-DDEBUG -g -DHANDMADE_SLOW=1 -DHHXCB_SLOW=1"
 OPT_FLAGS="-Ofast"

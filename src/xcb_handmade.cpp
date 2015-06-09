@@ -1002,22 +1002,16 @@ hhxcbCompleteAllWork(platform_work_queue* Queue)
 	Queue->CompletionGoal = 0;
 }
 
-struct hhxcb_thread_info
-{
-	uint32 LogicalThreadIndex;
-	platform_work_queue* Queue;
-};
-
 void*
 ThreadFunction(void* arg)
 {
-	hhxcb_thread_info* ThreadInfo = (hhxcb_thread_info*)arg;
+	platform_work_queue* Queue = (platform_work_queue*)arg;
 
 	for(;;)
 	{
-		if(hhxcbDoNextWorkQueueEntry(ThreadInfo->Queue))
+		if(hhxcbDoNextWorkQueueEntry(Queue))
 		{
-			sem_wait(ThreadInfo->Queue->SemaphoreHandle);
+			sem_wait(Queue->SemaphoreHandle);
 		}
 	}
 }
@@ -1026,6 +1020,32 @@ internal PLATFORM_WORK_QUEUE_CALLBACK(DoWorkerWork)
 {	
 	printf("thread %lu: %s\n", pthread_self(),
 		   (char*)Data);
+}
+
+internal void
+hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
+			   sem_t* SemaphoreHandle)
+{
+	Queue->CompletionGoal = 0;
+	Queue->CompletionCount = 0;
+	
+	Queue->NextEntryToWrite = 0;
+	Queue->NextEntryToRead = 0;
+	
+	uint32 InitialCount = 0;
+
+	sem_init(SemaphoreHandle, 0, InitialCount);
+	Queue->SemaphoreHandle = SemaphoreHandle;
+	
+	for(uint32 ThreadIndex = 0;
+		ThreadIndex < ThreadCount;
+		++ThreadIndex)
+	{
+		pthread_t thread = {};
+		pthread_attr_t attr = {};
+		pthread_attr_init(&attr);
+		pthread_create(&thread, &attr, &ThreadFunction, Queue);
+	}	
 }
 
 int
@@ -1132,33 +1152,20 @@ main()
 
     int16 *sample_buffer = (int16 *)malloc(sound_output.secondary_buffer_size);
 
+	// NOTE: not used yet
     thread_context t = {};
 
-	hhxcb_thread_info ThreadInfo[15] = {};
+	// NOTE: "sem_init" has an error if it is passed
+	//"Queue->SemaphoreHandle" directly
+	sem_t HighQueueSemaphoreHandle = {};
+	platform_work_queue HighPriorityQueue = {};
+	hhxcbMakeQueue(&HighPriorityQueue, 10, &HighQueueSemaphoreHandle);
 
-	platform_work_queue Queue = {};
+	sem_t LowQueueSemaphoreHandle = {};
+	platform_work_queue LowPriorityQueue = {};
+	hhxcbMakeQueue(&LowPriorityQueue, 4, &LowQueueSemaphoreHandle);
 	
-	uint32 InitialCount = 0;
-
-	// NOTE: "sem_init" has an error if it is passed "Queue.SemaphoreHandle"
-	sem_t SemaphoreHandle = {};
-	sem_init(&SemaphoreHandle, 0, InitialCount);
-	Queue.SemaphoreHandle = &SemaphoreHandle;
-	
-	for(uint32 ThreadIndex = 0;
-		ThreadIndex < ArrayCount(ThreadInfo);
-		++ThreadIndex)
-	{
-		hhxcb_thread_info* Info = ThreadInfo + ThreadIndex;
-
-		Info->Queue = &Queue;
-		Info->LogicalThreadIndex = ThreadIndex;
-		pthread_t thread = {};
-		pthread_attr_t attr = {};
-		pthread_attr_init(&attr);
-		pthread_create(&thread, &attr, &ThreadFunction, Info);
-	}
-
+#if 0
 	// NOTE: find better way to avoid "const" error
 	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A0");
 	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A1");
@@ -1183,6 +1190,7 @@ main()
 	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B9");
 
 	hhxcbCompleteAllWork(&Queue);
+#endif
 
     game_memory m = {};
     m.PermanentStorageSize = 256 * 1024 * 1024;
@@ -1191,8 +1199,9 @@ main()
     state.game_memory_block = calloc(state.total_size, sizeof(uint8));
     m.PermanentStorage = (uint8 *)state.game_memory_block;
     m.TransientStorage =
-        (uint8_t *)m.PermanentStorage + m.TransientStorageSize;
-	m.HighPriorityQueue = &Queue;
+        (uint8_t *)m.PermanentStorage + m.PermanentStorageSize;
+	m.HighPriorityQueue = &HighPriorityQueue;
+	m.LowPriorityQueue = &LowPriorityQueue;
 	m.PlatformAddEntry = hhxcbAddEntry;
 	m.PlatformCompleteAllWork = hhxcbCompleteAllWork;
 #ifdef HANDMADE_INTERNAL

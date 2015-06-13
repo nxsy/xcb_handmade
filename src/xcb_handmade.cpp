@@ -365,7 +365,7 @@ hhxcb_load_game(hhxcb_game_code *game_code, char *path)
     }
     game_code->GetSoundSamples =
         (game_get_sound_samples *)dlsym(game_code->library_handle, "GameGetSoundSamples");
-    if (game_code->UpdateAndRender == 0)
+    if (game_code->GetSoundSamples == 0)
     {
         char *error = dlerror();
         printf("Unable to load symbol GameGetSoundSamples: %s\n", error);
@@ -1152,9 +1152,6 @@ main()
 
     int16 *sample_buffer = (int16 *)malloc(sound_output.secondary_buffer_size);
 
-	// NOTE: not used yet
-    thread_context t = {};
-
 	// NOTE: "sem_init" has an error if it is passed
 	//"Queue->SemaphoreHandle" directly
 	sem_t HighQueueSemaphoreHandle = {};
@@ -1266,7 +1263,7 @@ main()
         }
         if (game_code.UpdateAndRender)
         {
-            game_code.UpdateAndRender(&t, &m, new_input, &game_buffer);
+            game_code.UpdateAndRender(&m, new_input, &game_buffer);
             HandleDebugCycleCounter(&m);
         }
 	
@@ -1296,7 +1293,7 @@ main()
                 sound_buffer.SampleCount += avail - target_available_frames;
             }
         }
-        game_code.GetSoundSamples(&t, &m, &sound_buffer);
+        game_code.GetSoundSamples(&m, &sound_buffer);
         if (sound_buffer.SampleCount > 0) {
             frames = snd_pcm_writei(context.handle, sample_buffer, sound_buffer.SampleCount);
 

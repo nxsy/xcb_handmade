@@ -91,6 +91,8 @@ struct tile_map
 
 struct game_state
 {
+	bool32 IsInitialized;
+	
     tile_map tilemap;
     wav_data wav;
     bmp_data bmp;

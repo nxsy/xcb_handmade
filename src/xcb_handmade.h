@@ -118,7 +118,7 @@ struct hhxcb_context
     bool32 need_controller_refresh;
     hhxcb_controller_info controller_info[HHXCB_MAX_CONTROLLERS];
 
-    snd_pcm_t *handle;
+    snd_pcm_t *alsa_handle;
     snd_output_t *alsa_log;
 };
 
@@ -127,5 +127,6 @@ struct hhxcb_sound_output
     int samples_per_second;
     uint32 running_sample_index;
     int bytes_per_sample;
-    uint32 secondary_buffer_size;
+    uint32 sound_buffer_size;
+	uint32 safety_bytes;
 };

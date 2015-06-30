@@ -1194,7 +1194,8 @@ main()
 	sound_output.safety_bytes = (uint32)((((real32)sound_output.samples_per_second*(real32)sound_output.bytes_per_sample) / game_update_hz)/3.0f);
     hhxcb_init_alsa(&context, sound_output.samples_per_second);
 
-	u32 MaxPossibleOverrun = 2*4*sizeof(u16);
+	// TODO: remove maxpossibleoverrun
+	u32 MaxPossibleOverrun = 2*8*sizeof(u16);
     int16 *sample_buffer = (int16 *)calloc((sound_output.sound_buffer_size + MaxPossibleOverrun), 1);
 
 	// NOTE: "sem_init" has an error if it is passed
@@ -1322,7 +1323,7 @@ main()
 		
         game_sound_output_buffer sound_buffer;
         sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
-        sound_buffer.SampleCount = sound_output.samples_per_second / game_update_hz;
+        sound_buffer.SampleCount = Align8((u32)(sound_output.samples_per_second / game_update_hz));
         sound_buffer.Samples = sample_buffer;
 
         int err, frames;

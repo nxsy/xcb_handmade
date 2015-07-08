@@ -274,8 +274,11 @@ hhxcbGetWallClock(void)
 inline real32
 hhxcbGetSecondsElapsed(timespec start, timespec end)
 {
-	real32 result = ((real32)end.tv_sec + (end.tv_nsec / 1000000000.0f)) - ((real32)start.tv_sec + (start.tv_nsec / 1000000000.0f));
-    return result;
+	u32 wholeSeconds = end.tv_sec - start.tv_sec;
+	r32 partialSeconds = (end.tv_nsec - start.tv_nsec) / 1000000000.0f;
+	
+	r32 result = (r32)wholeSeconds + partialSeconds;
+	return result;
 }
 
 internal void
@@ -913,7 +916,7 @@ hhxcb_refresh_controllers(hhxcb_context *context)
 }
 
 internal
-void hhxcb_init_alsa(hhxcb_context *context, uint32 samples_per_second)
+void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
 {
     // NOTE: "hw:0,0" doesn't seem to work with alsa running on top of pulseaudio
     char *device = (char *)"default";
@@ -933,20 +936,19 @@ void hhxcb_init_alsa(hhxcb_context *context, uint32 samples_per_second)
     snd_pcm_hw_params_alloca(&hwparams);
 	printf("\nSETTING HWPARAMS\n");
     snd_pcm_hw_params_any(context->alsa_handle, hwparams);
-//    err = snd_pcm_hw_params_set_rate_resample(context->alsa_handle, hwparams, 0);
-//	printf("set rate resample: %d\n", err);
+	
     err = snd_pcm_hw_params_set_access(context->alsa_handle, hwparams, SND_PCM_ACCESS_RW_INTERLEAVED);
 	if(!err)
 		printf("set access: SND_PCM_ACCESS_RW_INTERLEAVED\n");
     err = snd_pcm_hw_params_set_format(context->alsa_handle, hwparams, SND_PCM_FORMAT_S16_LE);
 	if(!err)
 		printf("set format: SND_PCM_FORMAT_S16_LE\n");
-    err = snd_pcm_hw_params_set_channels(context->alsa_handle, hwparams, 2);
+    err = snd_pcm_hw_params_set_channels(context->alsa_handle, hwparams, soundOutput->channels);
 	if(!err)
-		printf("set channels: 2\n");
-    err = snd_pcm_hw_params_set_rate(context->alsa_handle, hwparams, samples_per_second, 0);
+		printf("set channels: %d\n", soundOutput->channels);
+    err = snd_pcm_hw_params_set_rate(context->alsa_handle, hwparams, soundOutput->samples_per_second, 0);
 	if(!err)
-		printf("set rate: %d\n", samples_per_second);
+		printf("set rate: %d\n", soundOutput->samples_per_second);
 	// NOTE: period is the interval between interrupts by the soundcard to
 	// read the buffer
 //	err = snd_pcm_hw_params_set_period_size(context->alsa_handle, hwparams, sound_output->samples_per_second / 60, 0);
@@ -955,14 +957,17 @@ void hhxcb_init_alsa(hhxcb_context *context, uint32 samples_per_second)
 	
 	// NOTE: "snd_pcm_hw_params_set_buffer_size" takes a buffer size
 	// parameter in frames (i.e. (total samples) / (number of channels))
-    err = snd_pcm_hw_params_set_buffer_size(context->alsa_handle, hwparams, samples_per_second);
+    err = snd_pcm_hw_params_set_buffer_size(context->alsa_handle, hwparams, soundOutput->sample_count);
 	if(!err)
-	printf("set buffer size: %d\n", samples_per_second);
+		printf("set buffer size: %d\n", soundOutput->sample_count);
+	
     err = snd_pcm_hw_params(context->alsa_handle, hwparams);
 	if(!err)
-	printf("SET HWPARAMS and now in SND_PCM_STATE_PREPARED\n\n");
+		printf("SET HWPARAMS and now in SND_PCM_STATE_PREPARED\n\n");
+
+	snd_pcm_hw_params_get_period_size(hwparams, &soundOutput->period_size, 0);
 	
-	// NOTE: The PlayCursor/WriteCursor update frequency is given in this
+	// NOTE: The interrupt update frequency is given in this
 	// log dump, as the period size/time, on this machine it was ~241
 	// samples, or ~5 milliseconds.
     snd_pcm_dump(context->alsa_handle, context->alsa_log);
@@ -1076,6 +1081,8 @@ hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
 	
 	uint32 InitialCount = 0;
 
+	// NOTE: "sem_init" has an error if it is passed
+	// "Queue->SemaphoreHandle" directly
 	sem_init(SemaphoreHandle, 0, InitialCount);
 	Queue->SemaphoreHandle = SemaphoreHandle;
 	
@@ -1134,7 +1141,6 @@ main()
     real32 game_update_hz = (monitor_refresh_hz / 2.0f); // Should almost always be an int...
     long target_nanoseconds_per_frame = (1000 * 1000 * 1000) / game_update_hz;
 
-
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
     uint32_t values[2] =
     {
@@ -1188,18 +1194,18 @@ main()
 
     hhxcb_sound_output sound_output = {};
     sound_output.samples_per_second = 48000;
-    sound_output.bytes_per_sample = sizeof(int16) * 2;
+	sound_output.channels = 2;
+    sound_output.bytes_per_sample = sizeof(int16) * sound_output.channels;
 	// NOTE: one second buffer
-    sound_output.sound_buffer_size = sound_output.samples_per_second * sound_output.bytes_per_sample;
-	sound_output.safety_bytes = (uint32)((((real32)sound_output.samples_per_second*(real32)sound_output.bytes_per_sample) / game_update_hz)/3.0f);
-    hhxcb_init_alsa(&context, sound_output.samples_per_second);
-
+	sound_output.sample_count = sound_output.samples_per_second;
+    sound_output.sound_buffer_size = sound_output.sample_count * sound_output.bytes_per_sample;
+	sound_output.safety_samples = (uint32)(((real32)sound_output.samples_per_second / game_update_hz)/3.0f);
+    hhxcb_init_alsa(&context, &sound_output);
+	
 	// TODO: remove maxpossibleoverrun
 	u32 MaxPossibleOverrun = 2*8*sizeof(u16);
     int16 *sample_buffer = (int16 *)calloc((sound_output.sound_buffer_size + MaxPossibleOverrun), 1);
 
-	// NOTE: "sem_init" has an error if it is passed
-	// "Queue->SemaphoreHandle" directly
 	sem_t HighQueueSemaphoreHandle = {};
 	platform_work_queue HighPriorityQueue = {};
 	hhxcbMakeQueue(&HighPriorityQueue, 10, &HighQueueSemaphoreHandle);
@@ -1256,17 +1262,12 @@ main()
     hhxcb_init_replays(&state);
 
     timespec last_counter = hhxcbGetWallClock();
-    timespec flip_wall_clock = hhxcbGetWallClock();
 
     game_input input[2] = {};
     game_input *new_input = &input[0];
     game_input *old_input = &input[1];
 
     int64_t next_controller_refresh = 0;
-
-	uint32 AudioLatencyBytes = 0;
-	real32 AudioLatencySeconds = 0;
-	bool32 SoundIsValid = false;
 	
 	uint64 LastCycleCount = __rdtsc();
     while(!context.ending_flag)
@@ -1315,58 +1316,59 @@ main()
         if (game_code.UpdateAndRender)
         {
             game_code.UpdateAndRender(&m, new_input, &game_buffer);
-            HandleDebugCycleCounter(&m);
+            //HandleDebugCycleCounter(&m);
         }
 
-		timespec audio_wall_clock = hhxcbGetWallClock();
-		real32 FromBeginToAudioSeconds = hhxcbGetSecondsElapsed(flip_wall_clock, audio_wall_clock);
-		
-        game_sound_output_buffer sound_buffer;
-        sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
-        sound_buffer.SampleCount = Align8((u32)(sound_output.samples_per_second / game_update_hz));
-        sound_buffer.Samples = sample_buffer;
-
-        int err, frames;
-        snd_pcm_sframes_t delay, avail;
+		snd_pcm_sframes_t delay, avail;
         snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
-        if (avail == sound_output.sound_buffer_size)
-        {
-            // NOTE(nbm): Full available buffer, starting with ~60ms of silence
-            bzero(sample_buffer, sound_buffer.SampleCount * sound_output.bytes_per_sample);
-            snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
-            snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
-            snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
-            snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
-        }
-        else
-        {
-            uint32 target_available_frames = sound_output.sound_buffer_size;
-            target_available_frames -= (sound_buffer.SampleCount * 1);
-            if (avail - target_available_frames < sound_buffer.SampleCount)
-            {
-				// NOTE: added to prevent crash in EndTemperoryMemory
-				if((avail - target_available_frames) >= 0)
-					sound_buffer.SampleCount += avail - target_available_frames;
-            }
-        }
-        game_code.GetSoundSamples(&m, &sound_buffer);
-        if (sound_buffer.SampleCount > 0) {
-            frames = snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
+		u32 samplesToFill = 0;
+		u32 expectedSamplesPerFrame = (sound_output.samples_per_second / game_update_hz);
+		u32 samplesInBuffer = sound_output.sample_count - avail;
+		Assert(samplesInBuffer >= 0);
+		// NOTE: asymptote "samplesInBuffer" to "period_size*4", since the
+		// soundcard will interrupt to get samples every "period_size"
+		// samples. On this machine it is ~1000 samples
+		s32 sampleAdjustment = (samplesInBuffer - (sound_output.period_size*4)) / 2;
+		if(sound_output.sample_count == avail)
+		{
+			// NOTE: initial fill on startup and after an underrun
+			samplesToFill = (expectedSamplesPerFrame*2) + sound_output.safety_samples;
+		}
+		else
+		{
+			samplesToFill = expectedSamplesPerFrame - sampleAdjustment;
+		}
+		Assert(samplesToFill >= 0);
+		
+		game_sound_output_buffer sound_buffer = {};
+		sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
+		sound_buffer.SampleCount = Align8((samplesToFill));
+		sound_buffer.Samples = sample_buffer;
+		
+		if(game_code.GetSoundSamples)
+		{
+			game_code.GetSoundSamples(&m, &sound_buffer);
+		}
+#define SOUND_DEBUG 0
+#if SOUND_DEBUG
+		// NOTE: "delay" is the delay of the soundcard hardware
+		printf("samples in buffer before write: %ld delay in samples: %ld\n", (sound_output.sample_count - avail), delay);
+#endif
+		s32 writtenSamples = snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
+		if(writtenSamples < 0)
+		{
+			writtenSamples = snd_pcm_recover(context.alsa_handle, writtenSamples, 0);
+		}
+		else if(writtenSamples != sound_buffer.SampleCount)
+		{
+			printf("only wrote %d of %d samples\n", writtenSamples, sound_buffer.SampleCount);
+		}
 
-            if (frames < 0)
-            {
-                frames = snd_pcm_recover(context.alsa_handle, frames, 0);
-            }
-            if (frames < 0) {
-                printf("snd_pcm_writei failed: %s\n", snd_strerror(frames));
-                break;
-            }
-            if (frames > 0 && frames < sound_buffer.SampleCount)
-            {
-                printf("Short write (expected %i, wrote %i)\n", sound_buffer.SampleCount, frames);
-            }
-        }
-
+#if SOUND_DEBUG
+		snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
+		printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
+#endif
+				
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
         xcb_flush(context.connection);
@@ -1433,7 +1435,7 @@ main()
         new_input = old_input;
         old_input = temp_input;
 
-#if 1
+#if 0
 		uint64 EndCycleCount = __rdtsc();
 		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
 		LastCycleCount = EndCycleCount;
@@ -1443,7 +1445,6 @@ main()
 
 		printf("%.02fms/f,  %.02ff/s,  %.02fmc/f\n", ms_per_frame, FPS, MCPF);
 #endif
-
     }
 
     snd_pcm_close(context.alsa_handle);

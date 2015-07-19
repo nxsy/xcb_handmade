@@ -1097,6 +1097,30 @@ hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
 	}	
 }
 
+internal PLATFORM_GET_ALL_FILE_OF_TYPE_BEGIN(hhxcbGetAllFilesOfTypeBegin)
+{
+    platform_file_group FileGroup = {};
+
+    return(FileGroup);
+}
+
+internal PLATFORM_GET_ALL_FILE_OF_TYPE_END(hhxcbGetAllFilesOfTypeEnd)
+{
+}
+    
+internal PLATFORM_OPEN_FILE(hhxcbOpenFile)
+{
+    return(0);
+}
+
+internal PLATFORM_READ_DATA_FROM_FILE(hhxcbReadDataFromFile)
+{
+}
+
+internal PLATFORM_FILE_ERROR(hhxcbFileError)
+{
+}
+
 int
 main()
 {
@@ -1251,12 +1275,19 @@ main()
         (uint8_t *)m.PermanentStorage + m.PermanentStorageSize;
 	m.HighPriorityQueue = &HighPriorityQueue;
 	m.LowPriorityQueue = &LowPriorityQueue;
-	m.PlatformAddEntry = hhxcbAddEntry;
-	m.PlatformCompleteAllWork = hhxcbCompleteAllWork;
+	m.PlatformAPI.AddEntry = hhxcbAddEntry;
+	m.PlatformAPI.CompleteAllWork = hhxcbCompleteAllWork;
+
+	m.PlatformAPI.GetAllFilesOfTypeBegin = hhxcbGetAllFilesOfTypeBegin;
+	m.PlatformAPI.GetAllFilesOfTypeEnd = hhxcbGetAllFilesOfTypeEnd;
+	m.PlatformAPI.OpenFile = hhxcbOpenFile;
+	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
+	m.PlatformAPI.FileError = hhxcbFileError;
+	
 #ifdef HANDMADE_INTERNAL
-    m.DEBUGPlatformFreeFileMemory = debug_xcb_free_file_memory;
-    m.DEBUGPlatformReadEntireFile = debug_xcb_read_entire_file;
-    m.DEBUGPlatformWriteEntireFile = debug_xcb_write_entire_file;
+    m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;
+    m.PlatformAPI.DEBUGReadEntireFile = debug_xcb_read_entire_file;
+    m.PlatformAPI.DEBUGWriteEntireFile = debug_xcb_write_entire_file;
 #endif
 
     hhxcb_init_replays(&state);

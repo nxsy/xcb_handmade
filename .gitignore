@@ -2,6 +2,7 @@
 /src/handmade.h
 /src/handmade.cpp
 /src/handmade_*
+/src/test_asset_builder.*
 /src/xcb_handmade.config
 /src/xcb_handmade.creator
 /src/xcb_handmade.creator.user
@@ -11,3 +12,4 @@
 /data/test
 /data/test2
 /data/test3
+/data/test.hha

@@ -41,6 +41,7 @@
 #include <semaphore.h>// sem_init, sem_post, sem_wait, sem_destroy
 // Note: this gives a compiler error for "_Atomic"
 //#include <stdatomic.h>// atomic_fetch_add, etc...
+#include <dirent.h>   // opendir, readdir, closedir
 	
 #include <xcb/xcb.h>
 
@@ -1097,29 +1098,241 @@ hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
 	}	
 }
 
+struct hhxcb_platform_file_handle
+{
+	platform_file_handle H;
+	s32 hhxcbHandle;
+};
+
+struct hhxcb_platform_file_group
+{
+    platform_file_group H;
+    dirent CurrentFileInfo;
+	u32 CurrentFileNumber;
+	char *SearchTerm;
+	u32 SearchTermLength;
+};
+
+internal u32
+hhxcbGetStringLength(char *String)
+{
+	u32 Result = 0;
+	for(char *CharAt = String;
+		*CharAt != 0;
+		++CharAt)
+	{
+		++Result;
+	}
+
+	return Result;
+}
+
+internal char *
+hhxcbConcatenateStrings(char *String1, char *String2)
+{
+	u32 ResultLength = hhxcbGetStringLength(String1) + hhxcbGetStringLength(String2);
+
+	// NOTE: put result on the heap
+	char *Result = (char *)mmap(
+		0, (ResultLength + 1), PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);;
+
+	char *Dest = Result;
+	for(char *Source = String1;
+		*Source != 0;
+		)
+	{
+		*Dest++ = *Source++;
+	}
+
+	for(char *Source = String2;
+		*Source != 0;
+		)
+	{
+		*Dest++ = *Source++;
+	}
+    // NOTE: null terminate result
+	*Dest = 0;
+
+	// NOTE: return the address of result
+	return Result;
+}
+
+internal void
+hhxcbGetNumberOfFilesMatched(hhxcb_platform_file_group *FileGroup)
+{
+	Assert(FileGroup->SearchTermLength < 5);
+	
+	// NOTE: iterate through all files in current directory, searching
+	// for the search term to count the matches
+	DIR *Directory = {};
+	Directory = opendir(".");
+	if(Directory)
+	{		
+		dirent *ElementInDirectory = readdir(Directory);
+		while(ElementInDirectory)
+		{
+			if(ElementInDirectory->d_type == (DT_REG | DT_LNK))
+			{
+				u32 NameLength = hhxcbGetStringLength(ElementInDirectory->d_name);
+				if(NameLength > 5)
+				{
+					for(u32 CharToCheck = FileGroup->SearchTermLength;
+						CharToCheck > 0;
+						--CharToCheck, --NameLength)
+					{
+						if(ElementInDirectory->d_name[NameLength] != FileGroup->SearchTerm[CharToCheck])
+						{
+							break;
+						}
+						++FileGroup->H.FileCount;
+					}
+				}
+			}
+			ElementInDirectory = readdir(Directory);
+		}
+		closedir(Directory);
+	}
+}
+
+internal void
+hhxcbGetNextMatch(hhxcb_platform_file_group *FileGroup)
+{
+    // NOTE: iterate through all files in current directory, searching
+	// for the search term to find the next match
+	DIR *Directory = {};
+	Directory = opendir(".");
+	if(Directory)
+	{
+		u32 FileNumber = 0;
+		b32 incrementFileNumber = false;
+
+		dirent *ElementInDirectory = readdir(Directory);
+		while(ElementInDirectory)
+		{
+			if(ElementInDirectory->d_type == (DT_REG | DT_LNK))
+			{
+				u32 NameLength = hhxcbGetStringLength(ElementInDirectory->d_name);
+				if(NameLength > 5)
+				{
+					for(u32 CharToCheck = (hhxcbGetStringLength(FileGroup->SearchTerm));
+						CharToCheck > 0;
+						--CharToCheck, --NameLength)
+					{
+						if(ElementInDirectory->d_name[NameLength] != FileGroup->SearchTerm[CharToCheck])
+						{
+							break;
+						}	
+					}
+					incrementFileNumber = true;
+					if(FileNumber == FileGroup->CurrentFileNumber)
+					{
+						FileGroup->CurrentFileInfo = *ElementInDirectory;
+						++FileGroup->CurrentFileNumber;
+						break;
+					}
+				}
+			}
+			ElementInDirectory = readdir(Directory);
+			if(incrementFileNumber)
+			{
+				++FileNumber;
+				incrementFileNumber = false;
+			}
+		}
+		closedir(Directory);
+	}
+}
+
 internal PLATFORM_GET_ALL_FILE_OF_TYPE_BEGIN(hhxcbGetAllFilesOfTypeBegin)
 {
-    platform_file_group FileGroup = {};
+    hhxcb_platform_file_group *hhxcbFileGroup =
+		(hhxcb_platform_file_group *)mmap(
+		0, sizeof(hhxcb_platform_file_group), PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
-    return(FileGroup);
+	hhxcbFileGroup->H.FileCount = 0;
+	hhxcbFileGroup->CurrentFileInfo = {};
+	hhxcbFileGroup->CurrentFileNumber = 0;
+
+	hhxcbFileGroup->SearchTerm = hhxcbConcatenateStrings(".", Type);
+	hhxcbFileGroup->SearchTermLength = hhxcbGetStringLength(hhxcbFileGroup->SearchTerm);
+	hhxcbGetNumberOfFilesMatched(hhxcbFileGroup);
+	hhxcbGetNextMatch(hhxcbFileGroup);
+
+    return (platform_file_group *)hhxcbFileGroup;
 }
 
 internal PLATFORM_GET_ALL_FILE_OF_TYPE_END(hhxcbGetAllFilesOfTypeEnd)
 {
+	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup;
+	if(hhxcbFileGroup)
+	{
+		// NOTE: free string allocated in hhxcbConcatenateStrings
+		munmap(hhxcbFileGroup->SearchTerm, hhxcbFileGroup->SearchTermLength);
+		munmap(hhxcbFileGroup, sizeof(hhxcb_platform_file_group));
+	}
 }
-    
-internal PLATFORM_OPEN_FILE(hhxcbOpenFile)
+	
+internal PLATFORM_OPEN_FILE(hhxcbOpenNextFile)
 {
-    return(0);
-}
+	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup;
+	
+	hhxcb_platform_file_handle *Result = 0;
 
-internal PLATFORM_READ_DATA_FROM_FILE(hhxcbReadDataFromFile)
-{
+	if(hhxcbFileGroup->CurrentFileInfo.d_name)
+	{
+		Result = (hhxcb_platform_file_handle *)mmap(
+			0, sizeof(hhxcb_platform_file_handle), PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+		if(Result)
+		{
+			char *FileName = hhxcbFileGroup->CurrentFileInfo.d_name;
+			Result->hhxcbHandle = open(FileName, O_RDONLY);
+			Result->H.NoErrors = (Result->hhxcbHandle != -1);
+		}
+	}
+
+	hhxcbGetNextMatch(hhxcbFileGroup);
+
+    return (platform_file_handle *)Result;
 }
 
 internal PLATFORM_FILE_ERROR(hhxcbFileError)
 {
+#if HANDMADE_INTERNAL
+	printf("HHXCB_FILE_ERROR: ");
+	printf(Message);
+	printf("\n");
+#endif
+	Handle->NoErrors = false;
 }
+
+internal PLATFORM_READ_DATA_FROM_FILE(hhxcbReadDataFromFile)
+{
+	if(PlatformNoFileErrors(Source))
+	{
+		hhxcb_platform_file_handle *Handle = (hhxcb_platform_file_handle *)Source;
+		s64 written = pread(Handle->hhxcbHandle, Dest, Size, Offset);
+
+		if((written != -1) && ((u32)written == Size))
+		{
+			// NOTE: file read succeeded
+		}
+		else
+		{
+			hhxcbFileError(Source, "file read failed");
+		}
+	}
+}
+
+/*
+internal PLATFORM_CLOSE_FILE(hhxcbCloseFile)
+{
+    fclose(f);
+}
+ */
 
 int
 main()
@@ -1280,7 +1493,7 @@ main()
 
 	m.PlatformAPI.GetAllFilesOfTypeBegin = hhxcbGetAllFilesOfTypeBegin;
 	m.PlatformAPI.GetAllFilesOfTypeEnd = hhxcbGetAllFilesOfTypeEnd;
-	m.PlatformAPI.OpenFile = hhxcbOpenFile;
+	m.PlatformAPI.OpenNextFile = hhxcbOpenNextFile;
 	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
 	m.PlatformAPI.FileError = hhxcbFileError;
 	

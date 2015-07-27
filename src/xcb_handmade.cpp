@@ -1132,7 +1132,7 @@ hhxcbConcatenateStrings(char *String1, char *String2)
 {
 	u32 ResultLength = hhxcbGetStringLength(String1) + hhxcbGetStringLength(String2);
 
-	// NOTE: put result on the heap
+	// NOTE: allocate memory for result from the os
 	char *Result = (char *)mmap(
 		0, (ResultLength + 1), PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);;
@@ -1161,30 +1161,33 @@ hhxcbConcatenateStrings(char *String1, char *String2)
 internal void
 hhxcbGetNumberOfFilesMatched(hhxcb_platform_file_group *FileGroup)
 {
-	Assert(FileGroup->SearchTermLength < 5);
-	
 	// NOTE: iterate through all files in current directory, searching
 	// for the search term to count the matches
 	DIR *Directory = {};
 	Directory = opendir(".");
 	if(Directory)
-	{		
+	{
 		dirent *ElementInDirectory = readdir(Directory);
 		while(ElementInDirectory)
 		{
+			b32 Match = true;
 			if(ElementInDirectory->d_type == (DT_REG | DT_LNK))
 			{
 				u32 NameLength = hhxcbGetStringLength(ElementInDirectory->d_name);
-				if(NameLength > 5)
+				if(NameLength > FileGroup->SearchTermLength)
 				{
-					for(u32 CharToCheck = FileGroup->SearchTermLength;
-						CharToCheck > 0;
+					for(s32 CharToCheck = FileGroup->SearchTermLength;
+						CharToCheck >= 0;
 						--CharToCheck, --NameLength)
 					{
 						if(ElementInDirectory->d_name[NameLength] != FileGroup->SearchTerm[CharToCheck])
 						{
+							Match = false;
 							break;
 						}
+					}
+					if(Match)
+					{
 						++FileGroup->H.FileCount;
 					}
 				}
@@ -1205,40 +1208,39 @@ hhxcbGetNextMatch(hhxcb_platform_file_group *FileGroup)
 	if(Directory)
 	{
 		u32 FileNumber = 0;
-		b32 incrementFileNumber = false;
 
 		dirent *ElementInDirectory = readdir(Directory);
 		while(ElementInDirectory)
 		{
+			b32 Match = true;
 			if(ElementInDirectory->d_type == (DT_REG | DT_LNK))
 			{
 				u32 NameLength = hhxcbGetStringLength(ElementInDirectory->d_name);
-				if(NameLength > 5)
+				if(NameLength > FileGroup->SearchTermLength)
 				{
-					for(u32 CharToCheck = (hhxcbGetStringLength(FileGroup->SearchTerm));
-						CharToCheck > 0;
+					for(s32 CharToCheck = FileGroup->SearchTermLength;
+						CharToCheck >= 0;
 						--CharToCheck, --NameLength)
 					{
 						if(ElementInDirectory->d_name[NameLength] != FileGroup->SearchTerm[CharToCheck])
 						{
+							Match = false;
 							break;
 						}	
 					}
-					incrementFileNumber = true;
-					if(FileNumber == FileGroup->CurrentFileNumber)
+					if(Match)
 					{
-						FileGroup->CurrentFileInfo = *ElementInDirectory;
-						++FileGroup->CurrentFileNumber;
-						break;
+						if(FileNumber == FileGroup->CurrentFileNumber)
+						{
+							FileGroup->CurrentFileInfo = *ElementInDirectory;
+							++FileGroup->CurrentFileNumber;
+							break;
+						}
+						++FileNumber;
 					}
 				}
 			}
 			ElementInDirectory = readdir(Directory);
-			if(incrementFileNumber)
-			{
-				++FileNumber;
-				incrementFileNumber = false;
-			}
 		}
 		closedir(Directory);
 	}

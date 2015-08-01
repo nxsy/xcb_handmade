@@ -450,10 +450,11 @@ hhxcb_init_replays(hhxcb_state *state)
         {
             perror("ftruncate");
         }
-
+        // NOTE: using MAP_POPULATE makes process use > 2GB of memory,
+        // even when not using replays
         replay_buffer->memory_block = mmap(0, state->total_size,
                 PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_POPULATE,
+                MAP_PRIVATE, // | MAP_POPULATE,
                 replay_buffer->file_handle, 0);
 
         if (replay_buffer->memory_block == MAP_FAILED)
@@ -1336,6 +1337,30 @@ internal PLATFORM_CLOSE_FILE(hhxcbCloseFile)
 }
  */
 
+PLATFORM_ALLOCATE_MEMORY(hhxcbAllocateMemory)
+{
+	// NOTE: allocate (Size + sizeof(u64)) to store size to be used
+	// by munmap
+    void *Result = mmap(0, (Size + sizeof(u64)), PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	// NOTE: put size at start of memory
+	*(u64 *)Result = (u64)(Size + sizeof(u64));
+
+	// NOTE: return only the memory after where the size is stored
+    return(((u64 *)Result + 1));
+}
+
+PLATFORM_DEALLOCATE_MEMORY(hhxcbDeallocateMemory)
+{
+    if(Memory)
+    {
+		// NOTE: unlike virtualfree munmap seems to need the size to free
+		u64 *RealStartOfMemory = ((u64 *)Memory - 1);
+		u64 Size = *RealStartOfMemory;
+        munmap(RealStartOfMemory, Size);
+    }
+}
+
 int
 main()
 {
@@ -1498,6 +1523,9 @@ main()
 	m.PlatformAPI.OpenNextFile = hhxcbOpenNextFile;
 	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
 	m.PlatformAPI.FileError = hhxcbFileError;
+
+	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
+	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
 	
 #ifdef HANDMADE_INTERNAL
     m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;

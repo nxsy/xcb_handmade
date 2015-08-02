@@ -1101,13 +1101,11 @@ hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
 
 struct hhxcb_platform_file_handle
 {
-	platform_file_handle H;
 	s32 hhxcbHandle;
 };
 
 struct hhxcb_platform_file_group
 {
-    platform_file_group H;
     dirent CurrentFileInfo;
 	u32 CurrentFileNumber;
 	char *SearchTerm;
@@ -1159,9 +1157,11 @@ hhxcbConcatenateStrings(char *String1, char *String2)
 	return Result;
 }
 
-internal void
+internal u32
 hhxcbGetNumberOfFilesMatched(hhxcb_platform_file_group *FileGroup)
 {
+	u32 Result = 0;
+	
 	// NOTE: iterate through all files in current directory, searching
 	// for the search term to count the matches
 	DIR *Directory = {};
@@ -1189,7 +1189,7 @@ hhxcbGetNumberOfFilesMatched(hhxcb_platform_file_group *FileGroup)
 					}
 					if(Match)
 					{
-						++FileGroup->H.FileCount;
+						++Result;
 					}
 				}
 			}
@@ -1197,6 +1197,7 @@ hhxcbGetNumberOfFilesMatched(hhxcb_platform_file_group *FileGroup)
 		}
 		closedir(Directory);
 	}
+	return Result;
 }
 
 internal void
@@ -1249,26 +1250,44 @@ hhxcbGetNextMatch(hhxcb_platform_file_group *FileGroup)
 
 internal PLATFORM_GET_ALL_FILE_OF_TYPE_BEGIN(hhxcbGetAllFilesOfTypeBegin)
 {
+	platform_file_group Result = {};
+	
     hhxcb_platform_file_group *hhxcbFileGroup =
 		(hhxcb_platform_file_group *)mmap(
 		0, sizeof(hhxcb_platform_file_group), PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
-	hhxcbFileGroup->H.FileCount = 0;
+	Result.Platform = hhxcbFileGroup;
+	Result.FileCount = 0;
+	
 	hhxcbFileGroup->CurrentFileInfo = {};
 	hhxcbFileGroup->CurrentFileNumber = 0;
 
-	hhxcbFileGroup->SearchTerm = hhxcbConcatenateStrings(".", Type);
+	switch(Type)
+	{
+	    case PlatformFileType_AssetFile:
+	    {
+			hhxcbFileGroup->SearchTerm = hhxcbConcatenateStrings(".", "hha");
+		}break;
+		
+	    case PlatformFileType_SavedGameFile:
+		{
+			hhxcbFileGroup->SearchTerm = hhxcbConcatenateStrings(".", "hhs");
+		}break;
+		
+		InvalidDefaultCase;
+	}
+	
 	hhxcbFileGroup->SearchTermLength = hhxcbGetStringLength(hhxcbFileGroup->SearchTerm);
-	hhxcbGetNumberOfFilesMatched(hhxcbFileGroup);
+	Result.FileCount = hhxcbGetNumberOfFilesMatched(hhxcbFileGroup);
 	hhxcbGetNextMatch(hhxcbFileGroup);
 
-    return (platform_file_group *)hhxcbFileGroup;
+    return Result;
 }
 
 internal PLATFORM_GET_ALL_FILE_OF_TYPE_END(hhxcbGetAllFilesOfTypeEnd)
 {
-	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup;
+	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup->Platform;
 	if(hhxcbFileGroup)
 	{
 		// NOTE: free string allocated in hhxcbConcatenateStrings
@@ -1279,27 +1298,29 @@ internal PLATFORM_GET_ALL_FILE_OF_TYPE_END(hhxcbGetAllFilesOfTypeEnd)
 	
 internal PLATFORM_OPEN_FILE(hhxcbOpenNextFile)
 {
-	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup;
+	hhxcb_platform_file_group *hhxcbFileGroup = (hhxcb_platform_file_group *)FileGroup->Platform;
 	
-	hhxcb_platform_file_handle *Result = 0;
+	platform_file_handle Result = {};
 
 	if(hhxcbFileGroup->CurrentFileInfo.d_name)
 	{
-		Result = (hhxcb_platform_file_handle *)mmap(
+		hhxcb_platform_file_handle *hhxcbFileHandle =
+			(hhxcb_platform_file_handle *)mmap(
 			0, sizeof(hhxcb_platform_file_handle), PROT_READ | PROT_WRITE,
 			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		Result.Platform = hhxcbFileHandle;
 
-		if(Result)
+		if(hhxcbFileHandle)
 		{
 			char *FileName = hhxcbFileGroup->CurrentFileInfo.d_name;
-			Result->hhxcbHandle = open(FileName, O_RDONLY);
-			Result->H.NoErrors = (Result->hhxcbHandle != -1);
+			hhxcbFileHandle->hhxcbHandle = open(FileName, O_RDONLY);
+			Result.NoErrors = (hhxcbFileHandle->hhxcbHandle != -1);
 		}
 	}
 
 	hhxcbGetNextMatch(hhxcbFileGroup);
 
-    return (platform_file_handle *)Result;
+    return Result;
 }
 
 internal PLATFORM_FILE_ERROR(hhxcbFileError)
@@ -1316,10 +1337,10 @@ internal PLATFORM_READ_DATA_FROM_FILE(hhxcbReadDataFromFile)
 {
 	if(PlatformNoFileErrors(Source))
 	{
-		hhxcb_platform_file_handle *Handle = (hhxcb_platform_file_handle *)Source;
-		s64 written = pread(Handle->hhxcbHandle, Dest, Size, Offset);
+		hhxcb_platform_file_handle *Handle = (hhxcb_platform_file_handle *)Source->Platform;
+		s64 BytesRead = pread(Handle->hhxcbHandle, Dest, Size, Offset);
 
-		if((written != -1) && ((u32)written == Size))
+		if((BytesRead != -1) && ((u32)BytesRead == Size))
 		{
 			// NOTE: file read succeeded
 		}

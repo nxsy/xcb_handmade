@@ -15,7 +15,7 @@ mkdir -p build
 
 mkdir -p build/debug
 ## Asset file builder build
-g++ -std=c++0x ${WARNFLAGS} -o build/debug/test_asset_builder src/test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
+g++ -std=c++0x ${WARNFLAGS} -o build/debug/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
 ## Optimized renderer
 g++ -std=c++0x ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast
 g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
@@ -28,7 +28,7 @@ g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/debug/
 
 mkdir -p build/opt
 ## Asset file builder build
-g++ -std=c++0x ${WARNFLAGS} -o build/opt/test_asset_builder src/test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS}
+g++ -std=c++0x ${WARNFLAGS} -o build/opt/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS}
 ## Optimized renderer
 g++ -std=c++0x ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast
 g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}

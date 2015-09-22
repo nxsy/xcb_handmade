@@ -182,14 +182,13 @@ LoadBMP(char *FileName)
 }
 
 internal loaded_font *
-LoadFont(char *FileName, char *FontName)
+LoadFont(char *FileName, char *FontName, int PixelHeight)
 {    
     loaded_font *Font = (loaded_font *)malloc(sizeof(loaded_font));
 
 #if USE_FONTS_FROM_WINDOWS
     AddFontResourceExA(FileName, FR_PRIVATE, 0);
-    int Height = 128; // TODO(casey): Figure out how to specify pixels properly here
-    Font->Win32Handle = CreateFontA(Height, 0, 0, 0,
+    Font->Win32Handle = CreateFontA(PixelHeight, 0, 0, 0,
                                      FW_NORMAL, // NOTE(casey): Weight
                                      FALSE, // NOTE(casey): Italic
                                      FALSE, // NOTE(casey): Underline
@@ -210,8 +209,7 @@ LoadFont(char *FileName, char *FontName)
 		Font->stbFontInfo = (stbtt_fontinfo *)malloc(sizeof(stbtt_fontinfo));
         stbtt_InitFont(Font->stbFontInfo, (u8 *)Font->TTFFile.Contents, stbtt_GetFontOffsetForIndex((u8 *)Font->TTFFile.Contents, 0));
 
-		// NOTE: scale for a 128 pixel high font
-		Font->Scale = stbtt_ScaleForPixelHeight(Font->stbFontInfo, 128);
+		Font->Scale = stbtt_ScaleForPixelHeight(Font->stbFontInfo, PixelHeight);
 	}
 #endif
 	
@@ -1019,34 +1017,49 @@ WriteFonts(void)
     Initialize(Assets);
 
 #if USE_FONTS_FROM_WINDOWS
-    loaded_font *DebugFont = LoadFont("c:/Windows/Fonts/arial.ttf", "Arial");
-//        AddCharacterAsset(Assets, "c:/Windows/Fonts/cour.ttf", "Courier New", Character);
+    loaded_font *Fonts[] =
+	{
+		LoadFont("c:/Windows/Fonts/arial.ttf", "Arial", 128),
+		LoadFont("c:/Windows/Fonts/LiberationMono-Regular.ttf", "Liberation Mono", 20),
+	};
 #else
-    loaded_font *DebugFont = LoadFont("arial.ttf", "Arial");
-//        AddCharacterAsset(Assets, "cour.ttf", "Courier New", Character);	
+    loaded_font *Fonts[] =
+	{
+		LoadFont("arial.ttf", "Arial", 128),
+		LoadFont("LiberationMono-Regular.ttf", "Liberation Mono", 20),
+	};
 #endif
 	
     BeginAssetType(Assets, Asset_FontGlyph);
-    AddCharacterAsset(Assets, DebugFont, ' ');
-    for(u32 Character = '!';
-        Character <= '~';
-        ++Character)
-    {
-        AddCharacterAsset(Assets, DebugFont, Character);
-    }
+	for(u32 FontIndex = 0;
+		FontIndex < ArrayCount(Fonts);
+		++FontIndex)
+	{
+		loaded_font *Font = Fonts[FontIndex];
+		
+		AddCharacterAsset(Assets, Font, ' ');
+		for(u32 Character = '!';
+			Character <= '~';
+			++Character)
+		{
+			AddCharacterAsset(Assets, Font, Character);
+		}
 
-    // NOTE(casey): Kanji OWL!!!!!!!
-    AddCharacterAsset(Assets, DebugFont, 0x5c0f);
-    AddCharacterAsset(Assets, DebugFont, 0x8033);
-    AddCharacterAsset(Assets, DebugFont, 0x6728);
-    AddCharacterAsset(Assets, DebugFont, 0x514e);
-
+		// NOTE(casey): Kanji OWL!!!!!!!
+		AddCharacterAsset(Assets, Font, 0x5c0f);
+		AddCharacterAsset(Assets, Font, 0x8033);
+		AddCharacterAsset(Assets, Font, 0x6728);
+		AddCharacterAsset(Assets, Font, 0x514e);
+	}
     EndAssetType(Assets);
     
     // TODO(casey): This is kinda janky, because it means you have to get this
     // order right always!
     BeginAssetType(Assets, Asset_Font);
-    AddFontAsset(Assets, DebugFont);
+    AddFontAsset(Assets, Fonts[0]);
+	AddTag(Assets, Tag_FontType, FontType_Default);
+    AddFontAsset(Assets, Fonts[1]);
+	AddTag(Assets, Tag_FontType, FontType_Debug);
     EndAssetType(Assets);
 
     WriteHHA(Assets, "testfonts.hha");

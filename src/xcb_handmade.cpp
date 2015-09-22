@@ -395,6 +395,15 @@ hhxcb_load_game(hhxcb_game_code *game_code, char *path)
         free(error);
         return;
     }
+	game_code->DEBUGFrameEnd =
+        (debug_game_frame_end *)dlsym(game_code->library_handle, "DEBUGGameFrameEnd");
+    if (game_code->DEBUGFrameEnd == 0)
+    {
+        char *error = dlerror();
+        printf("Unable to load symbol DEBUGGameFrameEnd: %s\n", error);
+        free(error);
+        return;
+    }
 
     game_code->is_valid = game_code->library_handle &&
         game_code->UpdateAndRender && game_code->GetSoundSamples;
@@ -1528,13 +1537,17 @@ main()
 #endif
 
     game_memory m = {};
-    m.PermanentStorageSize = 256 * 1024 * 1024;
-    m.TransientStorageSize = 256 * 1024 * 1024;
-    state.total_size = m.PermanentStorageSize + m.TransientStorageSize;
+    m.PermanentStorageSize = Megabytes(256);
+    m.TransientStorageSize = Gigabytes(1);
+    m.DebugStorageSize = Megabytes(64);
+    state.total_size = m.PermanentStorageSize + m.TransientStorageSize +
+		m.DebugStorageSize;
     state.game_memory_block = calloc(state.total_size, sizeof(uint8));
     m.PermanentStorage = (uint8 *)state.game_memory_block;
     m.TransientStorage =
         (uint8_t *)m.PermanentStorage + m.PermanentStorageSize;
+	m.DebugStorage =
+        (u8 *)m.TransientStorage + m.TransientStorageSize;
 	m.HighPriorityQueue = &HighPriorityQueue;
 	m.LowPriorityQueue = &LowPriorityQueue;
 	m.PlatformAPI.AddEntry = hhxcbAddEntry;
@@ -1568,6 +1581,8 @@ main()
 	uint64 LastCycleCount = __rdtsc();
     while(!context.ending_flag)
     {
+		debug_frame_end_info FrameEndInfo = {};
+		
         if (last_counter.tv_sec >= next_controller_refresh)
         {
             hhxcb_refresh_controllers(&context);
@@ -1584,11 +1599,15 @@ main()
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
         }
-
+		
+		FrameEndInfo.ExecutableReady = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, new_input, old_input);
 
+		FrameEndInfo.InputProcessed = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		
 		// NOTE: setup game_buffer.Memory upside down and set
 		// game_buffer.pitch negative, so the game would fill the
 		// backbuffer upside down. XCB doesn't seem to have an
@@ -1614,6 +1633,8 @@ main()
             game_code.UpdateAndRender(&m, new_input, &game_buffer);
             //HandleDebugCycleCounter(&m);
         }
+
+		FrameEndInfo.GameUpdated = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
 
 		snd_pcm_sframes_t delay, avail;
         snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
@@ -1664,6 +1685,8 @@ main()
 		snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
 		printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
 #endif
+
+		FrameEndInfo.AudioUpdated = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
 				
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
@@ -1712,6 +1735,8 @@ main()
             clock_gettime(HHXCB_CLOCK, &spin_counter);
         }
 
+		FrameEndInfo.FramerateWaitComplete = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+
         timespec end_counter = hhxcbGetWallClock();
 
         long ns_per_frame = end_counter.tv_nsec - last_counter.tv_nsec;
@@ -1740,6 +1765,19 @@ main()
 		real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
 
 		printf("%.02fms/f,  %.02ff/s,  %.02fmc/f\n", ms_per_frame, FPS, MCPF);
+#endif
+
+#if HANDMADE_INTERNAL
+		FrameEndInfo.EndOfFrame = hhxcbGetSecondsElapsed(last_counter, end_counter);
+
+		uint64 EndCycleCount = __rdtsc();
+		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
+		LastCycleCount = EndCycleCount;
+
+		if(game_code.DEBUGFrameEnd)
+		{
+			game_code.DEBUGFrameEnd(&m, &FrameEndInfo);
+		}
 #endif
     }
 

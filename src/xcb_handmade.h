@@ -59,6 +59,8 @@ struct hhxcb_game_code
     game_update_and_render *UpdateAndRender;
     game_get_sound_samples *GetSoundSamples;
 
+	debug_game_frame_end *DEBUGFrameEnd;
+	
     bool32 is_valid;
     time_t library_mtime;
 };

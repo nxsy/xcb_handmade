@@ -282,6 +282,7 @@ hhxcbGetSecondsElapsed(timespec start, timespec end)
 	return result;
 }
 
+#if 0
 internal void
 HandleDebugCycleCounter(game_memory* m)
 {
@@ -305,7 +306,7 @@ HandleDebugCycleCounter(game_memory* m)
 	}
 #endif
 }
-
+#endif
 
 internal void
 hhxcb_get_binary_name(hhxcb_state *state)

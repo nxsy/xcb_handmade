@@ -528,7 +528,7 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
 			Texel = SRGB255ToLinear1(Texel);
 			Texel.rgb *= Texel.a;
 			Texel = Linear1ToSRGB255(Texel);
-                
+			
 			*Dest++ = (((uint32)(Texel.a + 0.5f) << 24) |
 					   ((uint32)(Texel.r + 0.5f) << 16) |
 					   ((uint32)(Texel.g + 0.5f) << 8) |
@@ -540,8 +540,15 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
 
 	stbtt_FreeBitmap(MonoBitmap, 0);
 
-	Asset->Bitmap.AlignPercentage[0] = (1.0f) / (r32)Result.Width;
-	Asset->Bitmap.AlignPercentage[1] = (1.0f) / (r32)Result.Height;
+	// NOTE: the bitmap returned from stbtt_GetCodepointBitmap is truncated
+	// to the smallest possible bounding box, this function returns the
+	// parameters of that bounding box, wrt the current cursor position
+	// (with y defined as going down)
+	s32 ix0, iy0, ix1, iy1;
+	stbtt_GetCodepointBitmapBox(Font->stbFontInfo, CodePoint, Font->Scale, Font->Scale, &ix0, &iy0, &ix1, &iy1);
+
+	Asset->Bitmap.AlignPercentage[0] = -(r32)ix0 / (r32)Result.Width;
+	Asset->Bitmap.AlignPercentage[1] = (r32)iy1 / (r32)Result.Height;
 
 	// NOTE: have to scale these parameters
 	s32 advanceWidth;
@@ -551,7 +558,7 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
         OtherGlyphIndex < Font->MaxGlyphCount;
         ++OtherGlyphIndex)
     {
-        Font->HorizontalAdvance[GlyphIndex*Font->MaxGlyphCount + OtherGlyphIndex] = ((r32)advanceWidth*Font->Scale);
+        Font->HorizontalAdvance[GlyphIndex*Font->MaxGlyphCount + OtherGlyphIndex] = (r32)(advanceWidth*Font->Scale);
     }
 	
 #endif

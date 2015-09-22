@@ -13,28 +13,48 @@ OPT_FLAGS="-Ofast"
 
 mkdir -p build
 
+
+### Debug build
+
 mkdir -p build/debug
 ## Asset file builder build
 g++ -std=c++0x ${WARNFLAGS} -o build/debug/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
-## Optimized renderer
-g++ -std=c++0x ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
-g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
-
+## Optimized renderer build
+g++ -std=c++0x -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
+## Shared library build
+g++ -std=c++0x -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
+## Overwrite the old shared library with the new one
 mv -f build/debug/libhandmade.so.new build/debug/libhandmade.so
-g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libalternate.so.1 -fPIC -o build/debug/libalternate.so.new src/alternate/alternate.cpp ${CPPFLAGS} ${DEBUG_FLAGS}
-mv -f build/debug/libalternate.so.new build/debug/libalternate.so
+
+## Alternate shared library build
+#g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libalternate.so.1 -fPIC -o build/debug/libalternate.so.new src/alternate/alternate.cpp ${CPPFLAGS} ${DEBUG_FLAGS}
+#mv -f build/debug/libalternate.so.new build/debug/libalternate.so
+
+## Platform code build
 g++ -std=c++0x ${WARNFLAGS} -o build/debug/xcb_handmade src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
-g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/debug/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
+
+## Alternate platform code build
+#g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/debug/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
+
+
+### Optimized build
 
 mkdir -p build/opt
 ## Asset file builder build
 g++ -std=c++0x ${WARNFLAGS} -o build/opt/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS}
 ## Optimized renderer
-g++ -std=c++0x ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
-g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}
-
+g++ -std=c++0x -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
+## Shared library build
+g++ -std=c++0x -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}
+## Overwrite the old shared library with the new one
 mv -f build/opt/libhandmade.so.new build/opt/libhandmade.so
-g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libalternate.so.1 -fPIC -o build/opt/libalternate.so.new -I src src/alternate/alternate.cpp ${CPPFLAGS} ${OPT_FLAGS}
-mv -f build/opt/libalternate.so.new build/opt/libalternate.so
+
+## Alternate shared library build
+#g++ -std=c++0x ${GAMEWARNFLAGS} -shared -Wl,-soname,libalternate.so.1 -fPIC -o build/opt/libalternate.so.new -I src src/alternate/alternate.cpp ${CPPFLAGS} ${OPT_FLAGS}
+#mv -f build/opt/libalternate.so.new build/opt/libalternate.so
+
+## Platform code build
 g++ -std=c++0x ${WARNFLAGS} -o build/opt/xcb_handmade src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}
-g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/opt/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}
+
+## Alternate platform code build
+#g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/opt/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}

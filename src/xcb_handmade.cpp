@@ -1392,6 +1392,16 @@ PLATFORM_DEALLOCATE_MEMORY(hhxcbDeallocateMemory)
     }
 }
 
+inline void
+hhxcbRecordTimestamp(debug_frame_end_info *Info, char *Name, r32 Seconds)
+{
+    Assert(Info->TimestampCount < ArrayCount(Info->Timestamps));
+
+    debug_frame_timestamp *Timestamp = Info->Timestamps + Info->TimestampCount++;
+    Timestamp->Name = Name;
+    Timestamp->Seconds = Seconds;
+}
+
 int
 main()
 {
@@ -1600,13 +1610,13 @@ main()
             hhxcb_load_game(&game_code, source_game_code_library_path);
         }
 		
-		FrameEndInfo.ExecutableReady = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		hhxcbRecordTimestamp(&FrameEndInfo, "ExecutableReady", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 		
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, new_input, old_input);
 
-		FrameEndInfo.InputProcessed = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		hhxcbRecordTimestamp(&FrameEndInfo, "InputProcessed", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 		
 		// NOTE: setup game_buffer.Memory upside down and set
 		// game_buffer.pitch negative, so the game would fill the
@@ -1634,7 +1644,7 @@ main()
             //HandleDebugCycleCounter(&m);
         }
 
-		FrameEndInfo.GameUpdated = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		hhxcbRecordTimestamp(&FrameEndInfo, "GameUpdated", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 
 		snd_pcm_sframes_t delay, avail;
         snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
@@ -1686,7 +1696,7 @@ main()
 		printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
 #endif
 
-		FrameEndInfo.AudioUpdated = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		hhxcbRecordTimestamp(&FrameEndInfo, "AudioUpdated", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 				
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
@@ -1735,7 +1745,7 @@ main()
             clock_gettime(HHXCB_CLOCK, &spin_counter);
         }
 
-		FrameEndInfo.FramerateWaitComplete = hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock());
+		hhxcbRecordTimestamp(&FrameEndInfo, "FrameWaitComplete", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 
         timespec end_counter = hhxcbGetWallClock();
 
@@ -1768,7 +1778,7 @@ main()
 #endif
 
 #if HANDMADE_INTERNAL
-		FrameEndInfo.EndOfFrame = hhxcbGetSecondsElapsed(last_counter, end_counter);
+		hhxcbRecordTimestamp(&FrameEndInfo, "EndOfFrame", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
 
 		uint64 EndCycleCount = __rdtsc();
 		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;

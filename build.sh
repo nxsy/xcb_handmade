@@ -20,9 +20,9 @@ mkdir -p build/debug
 ## Asset file builder build
 g++ -std=c++0x ${WARNFLAGS} -o build/debug/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
 ## Optimized renderer build
-g++ -std=c++0x -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
+g++ -std=c++0x -DDebugRecordArrayIndexConstant=1 -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library build
-g++ -std=c++0x -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
+g++ -std=c++0x -DDebugRecordArrayIndexConstant=0 -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
 ## Overwrite the old shared library with the new one
 mv -f build/debug/libhandmade.so.new build/debug/libhandmade.so
 
@@ -43,9 +43,9 @@ mkdir -p build/opt
 ## Asset file builder build
 g++ -std=c++0x ${WARNFLAGS} -o build/opt/stb_test_asset_builder src/stb_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS}
 ## Optimized renderer
-g++ -std=c++0x -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
+g++ -std=c++0x -DDebugRecordArrayIndexConstant=1 -DDebugRecordArray=DebugRecords_Optimized ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library build
-g++ -std=c++0x -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}
+g++ -std=c++0x -DDebugRecordArrayIndexConstant=0 -DDebugRecordArray=DebugRecords_Main ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}
 ## Overwrite the old shared library with the new one
 mv -f build/opt/libhandmade.so.new build/opt/libhandmade.so
 

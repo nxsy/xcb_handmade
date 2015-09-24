@@ -18,6 +18,7 @@
 #define ONE_PAST_MAX_FONT_CODEPOINT (0x10FFFF + 1)
 
 #define USE_FONTS_FROM_WINDOWS 0
+#define USE_FONTS_FROM_XWINDOWS 1
 
 #if USE_FONTS_FROM_WINDOWS
 #include <windows.h>
@@ -27,6 +28,12 @@
 
 global_variable VOID *GlobalFontBits;
 global_variable HDC GlobalFontDeviceContext;
+
+#elif USE_FONTS_FROM_XWINDOWS
+#include <X11/Xlib.h>
+
+#define MAX_FONT_WIDTH 60
+#define MAX_FONT_HEIGHT 60
 
 #else
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -54,6 +61,16 @@ struct loaded_font
 #if USE_FONTS_FROM_WINDOWS
     HFONT Win32Handle;
     TEXTMETRIC TextMetric;
+#elif USE_FONTS_FROM_XWINDOWS
+	Display *display;
+	u32 screen;
+	GC graphicsContext;
+	Pixmap pixmap;
+	Visual *visual;
+	Font loadedFont;
+	XFontStruct *fontInfo;
+	XImage *charBitmap;
+	u32 *bitmapBits;
 #else
 	stbtt_fontinfo *stbFontInfo;
 	entire_file TTFFile;

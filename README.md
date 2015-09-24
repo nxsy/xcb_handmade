@@ -9,7 +9,7 @@ Prerequisites
 
 Most importantly, you’ll need Handmade Hero source code for the
 platform-independent game code.  Pre-order the game and get the nightly source
-code.  This revision works with day 180 or later.
+code.  This revision works with day 181 or later.
 
 You will need g++ (tested with g++ 4.6) or other C++ compiler.
 
@@ -80,6 +80,27 @@ or
 
 You can use WASD for movement (or the XBox 360 D-pad), and Up Arrow (or the Y
 button on the XBox 360 controller) to sprint.
+
+Test asset builder
+------------------
+
+The files, "multiplatform_test_asset_builder.*", extend the
+"test_asset_builder.*" files to support core xlib fonts and stb_truetype
+fonts.
+
+To use core xlib fonts, set the "USE_FONTS_FROM_WINDOWS" define to 0, and
+the "USE_FONTS_FROM_XWINDOWS" define to 1 in the
+"multiplatform_test_asset_builder.h" file, or to use stb_truetype fonts,
+set the "USE_FONTS_FROM_WINDOWS" define to 0, and the
+"USE_FONTS_FROM_XWINDOWS" define to 0 in the
+"multiplatform_test_asset_builder.h" file.
+
+Currently to use stb_truetype, the ttf files need to be in the directory you
+build the asset files in, typically "handmade/data". Core xlib doesn't
+support truetype fonts, only bitmap fonts that seem to be integrated into
+xwindows. You can use the terminal command "xlsfonts" to get a list of the
+fonts xwindows has hidden away somewhere.
+
 
 IACA
 ----

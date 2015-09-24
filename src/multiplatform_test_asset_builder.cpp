@@ -6,7 +6,7 @@
    $Notice: (C) Copyright 2015 by Molly Rocket, Inc. All Rights Reserved. $
    ======================================================================== */
 
-#include "stb_test_asset_builder.h"
+#include "multiplatform_test_asset_builder.h"
 
 #pragma pack(push, 1)
 struct bitmap_header
@@ -202,6 +202,33 @@ LoadFont(char *FileName, char *FontName, int PixelHeight)
 
     SelectObject(GlobalFontDeviceContext, Font->Win32Handle);
     GetTextMetrics(GlobalFontDeviceContext, &Font->TextMetric);
+#elif USE_FONTS_FROM_XWINDOWS
+	Font->display = XOpenDisplay(0);
+	Font->screen = XDefaultScreen(Font->display);
+	Font->pixmap = XCreatePixmap(Font->display, XDefaultRootWindow(Font->display), (MAX_FONT_HEIGHT + 10), (MAX_FONT_WIDTH + 10), XDefaultDepth(Font->display, Font->screen));
+	Font->graphicsContext = XDefaultGC(Font->display, Font->screen);
+	Font->visual = XDefaultVisual(Font->display, Font->screen);
+	char fontString[256];
+	// NOTE: even though fonts with the iso10646 character set are selected,
+	// which as far as I can tell is the same as unicode, the fonts don't
+	// seem to have kanji glyphs
+	snprintf(fontString, sizeof(fontString), "*-%s-*-%s-*-iso10646-1", FileName, FontName);
+	// NOTE: check if any fonts match, if none match, allow any size to try
+	// to get a match
+	s32 matchCount = 0;
+	XListFonts(Font->display, fontString, 1, &matchCount);
+	if(matchCount == 0)
+	{
+		snprintf(fontString, sizeof(fontString), "*-%s-*-iso10646-1", FileName);
+	}
+	Font->loadedFont = XLoadFont(Font->display, fontString);
+	Font->fontInfo = XQueryFont(Font->display, Font->loadedFont);
+	Font->bitmapBits = (u32 *)malloc(MAX_FONT_WIDTH*MAX_FONT_HEIGHT*sizeof(u32));
+	Font->charBitmap = XCreateImage(Font->display, Font->visual, XDefaultDepth(Font->display, Font->screen), ZPixmap, 0, (char *)Font->bitmapBits, MAX_FONT_WIDTH, MAX_FONT_HEIGHT, 32, (MAX_FONT_WIDTH*sizeof(u32)));
+
+	XSetFont(Font->display, Font->graphicsContext, Font->loadedFont);
+	XSetForeground(Font->display, Font->graphicsContext, 0xFFFFFFFF);
+	XSetBackground(Font->display, Font->graphicsContext, 0x00000000);
 #else
 	Font->TTFFile = ReadEntireFile(FileName);
 	if(Font->TTFFile.ContentsSize != 0)
@@ -266,6 +293,9 @@ FinalizeFontKerning(loaded_font *Font)
     }    
 
     free(KerningPairs);
+#elif USE_FONTS_FROM_XWINDOWS
+	// NOTE: xlib core fonts don't have kerning (the non-monospaced,
+	// proportional xlib fonts just have a variable width)
 #else
 	for(u32 firstGlyphIndex = 0;
 		firstGlyphIndex < Font->GlyphCount;
@@ -303,6 +333,12 @@ FreeFont(loaded_font *Font)
     {
 #if USE_FONTS_FROM_WINDOWS
         DeleteObject(Font->Win32Handle);
+#elif USE_FONTS_FROM_XWINDOWS
+		free(Font->display);
+		free(Font->visual);
+		free(Font->fontInfo);
+		free(Font->charBitmap);
+		free(Font->bitmapBits);
 #else
 		free(Font->stbFontInfo);
 		free(Font->TTFFile.Contents);
@@ -397,22 +433,22 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
             {
                 if(MinX > X)
                 {
-                    MinX = X;                    
+                    MinX = X;
                 }
 
                 if(MinY > Y)
                 {
-                    MinY = Y;                    
+                    MinY = Y;
                 }
                 
                 if(MaxX < X)
                 {
-                    MaxX = X;                    
+                    MaxX = X;
                 }
 
                 if(MaxY < Y)
                 {
-                    MaxY = Y;                    
+                    MaxY = Y;
                 }
             }
 
@@ -433,7 +469,7 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
         Result.Memory = malloc(Result.Height*Result.Pitch);
         Result.Free = Result.Memory;
 
-        memset(Result.Memory, 0, Result.Height*Result.Pitch);
+        memset(Result.Memory, 0x00, Result.Height*Result.Pitch);
 
         u8 *DestRow = (u8 *)Result.Memory + (Result.Height - 1 - 1)*Result.Pitch;
         u32 *SourceRow = (u32 *)GlobalFontBits + (MAX_FONT_HEIGHT - 1 - MinY)*MAX_FONT_WIDTH;
@@ -497,6 +533,162 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
         {
             Font->HorizontalAdvance[OtherGlyphIndex*Font->MaxGlyphCount + GlyphIndex] += KerningChange;
         }
+    }
+
+#elif USE_FONTS_FROM_XWINDOWS
+	s32 MaxWidth = MAX_FONT_WIDTH;
+	s32 MaxHeight = MAX_FONT_HEIGHT;
+
+	memset(Font->bitmapBits, 0x00, MaxWidth*MaxHeight*sizeof(u32));
+
+	XSetForeground(Font->display, Font->graphicsContext, 0x00000000);
+	XFillRectangle(Font->display, Font->pixmap, Font->graphicsContext, 0, 0, MaxWidth, MaxHeight);
+
+	// NOTE: position, in pixels, from the top left of the pixmap, to place
+	// the character within the pixmap
+	s32 FontStartX = 20;
+	s32 FontStartY = 40;
+	XSetForeground(Font->display, Font->graphicsContext, 0xFFFFFFFF);
+	XChar2b multiChar;
+	multiChar.byte2 = (CodePoint & 0xFF);
+	multiChar.byte1 = (CodePoint >> 8);
+	XDrawString16(Font->display, Font->pixmap, Font->graphicsContext, FontStartX, FontStartY, &multiChar, 1);
+	Font->charBitmap = XGetImage(Font->display, Font->pixmap, 0, 0, MaxWidth, MaxHeight, AllPlanes, ZPixmap);
+
+	s32 MinX = 10000;
+	s32 MinY = 10000;
+	s32 MaxX = -10000;
+	s32 MaxY = -10000;
+
+	u32 *Row = (u32 *)Font->charBitmap->data;
+	for(s32 Y = 0;
+		Y < MaxHeight;
+		++Y)
+	{
+		u32 *Pixel = Row;
+		for(s32 X = 0;
+			X < MaxWidth;
+			++X)
+		{
+// NOTE: sanity check
+#if 0
+			u32 RefPixel = Font->charBitmap->f.get_pixel(Font->charBitmap, X, Y);
+			//XGetPixel(charBitmap, X, Y);
+			Assert(RefPixel == (*Pixel & 0xFFFFFF));
+#endif
+			if((*Pixel & 0xFFFFFF) != 0)
+			{
+				if(MinX > X)
+				{
+					MinX = X;
+				}
+
+				if(MinY > Y)
+				{
+					MinY = Y;
+				}
+
+				if(MaxX < X)
+				{
+					MaxX = X;
+				}
+
+				if(MaxY < Y)
+				{
+					MaxY = Y;
+				}
+			}
+
+			++Pixel;
+		}
+		Row += MaxWidth;
+	}
+
+	if(MinX <= MaxX)
+	{
+		--MinX;
+		--MinY;
+		++MaxX;
+		++MaxY;
+
+		s32 charWidth = (MaxX - MinX) + 1;
+		s32 charHeight = (MaxY - MinY) + 1;
+
+		Assert((charWidth >= 0) && (charHeight >= 0));
+
+		Result.Width = charWidth + 2;
+		Result.Height = charHeight + 2;
+		Result.Pitch = Result.Width*BITMAP_BYTES_PER_PIXEL;
+		Result.Memory = malloc(Result.Height*Result.Pitch);
+		Result.Free = Result.Memory;
+
+		memset(Result.Memory, 0x00, Result.Height*Result.Pitch);
+
+		u8 *DestRow = (u8 *)Result.Memory + (Result.Height - 1)*Result.Pitch;
+		u32 *SourceRow = (u32 *)Font->charBitmap->data + (MinY*MaxWidth);
+		for(s32 Y = MinY;
+			Y <= MaxY;
+			++Y)
+		{
+			u32 *Source = (u32 *)SourceRow + MinX;
+			u32 *Dest = (u32 *)DestRow + 1;
+			for(s32 X = MinX;
+				X <= MaxX;
+				++X)
+			{
+// NOTE: sanity check
+#if 0
+				u32 Pixel = Font->charBitmap->f.get_pixel(Font->charBitmap, X, Y);
+				Assert(Pixel == (*Source & 0xFFFFFF));
+#else
+				u32 Pixel = *Source;
+#endif
+                r32 Gray = (r32)(Pixel & 0xFF);
+                v4 Texel = {255.0f, 255.0f, 255.0f, Gray};
+                Texel = SRGB255ToLinear1(Texel);
+                Texel.rgb *= Texel.a;
+                Texel = Linear1ToSRGB255(Texel);
+
+                *Dest++ = (((uint32)(Texel.a + 0.5f) << 24) |
+                           ((uint32)(Texel.r + 0.5f) << 16) |
+                           ((uint32)(Texel.g + 0.5f) << 8) |
+                           ((uint32)(Texel.b + 0.5f) << 0));
+
+				++Source;
+			}
+
+			DestRow -= Result.Pitch;
+			SourceRow += MaxWidth;
+		}
+	}
+
+	r32 advanceWidth = (r32)Font->fontInfo->max_bounds.width;
+	r32 leftBearing = 0.0f;
+	// NOTE: there are only 255 characters defined (I think, 255 per
+	// locale), I don't understand international core xlib fonts very well
+	if(CodePoint == (CodePoint & 0xFF))
+	{
+		XCharStruct charInfo = Font->fontInfo->per_char[CodePoint];
+		advanceWidth = (r32)charInfo.width;
+		leftBearing = (r32)charInfo.lbearing;
+	}
+
+	Asset->Bitmap.AlignPercentage[0] = -leftBearing / (r32)Result.Width;
+	// NOTE: from the top of the pixmap
+	s32 Baseline = FontStartY;
+	// NOTE: distance, in pixels, from the baseline to where the character
+	// begins (if the character starts below the baseline, this is negative)
+	r32 HeightAboveBaseline = (r32)(Baseline - MaxY);
+	// NOTE: this moves the alignment of all the text down, so part of the
+	// top line isn't cut off
+	r32 FontOffset = Baseline / 4;
+	Asset->Bitmap.AlignPercentage[1] = (-HeightAboveBaseline + FontOffset) / (r32)Result.Height;
+
+	for(u32 OtherGlyphIndex = 0;
+        OtherGlyphIndex < Font->MaxGlyphCount;
+        ++OtherGlyphIndex)
+    {
+        Font->HorizontalAdvance[GlyphIndex*Font->MaxGlyphCount + OtherGlyphIndex] = advanceWidth;
     }
 
 #else
@@ -853,6 +1045,10 @@ AddFontAsset(game_assets *Assets, loaded_font *Font)
     Asset.HHA->Font.AscenderHeight = (r32)Font->TextMetric.tmAscent;
     Asset.HHA->Font.DescenderHeight = (r32)Font->TextMetric.tmDescent;
     Asset.HHA->Font.ExternalLeading = (r32)Font->TextMetric.tmExternalLeading;
+#elif USE_FONTS_FROM_XWINDOWS
+	Asset.HHA->Font.AscenderHeight = (r32)Font->fontInfo->max_bounds.ascent;
+    Asset.HHA->Font.DescenderHeight = (r32)Font->fontInfo->max_bounds.descent;
+    Asset.HHA->Font.ExternalLeading = 0.0f;
 #else
 	s32 ascent, descent, lineGap;
 	stbtt_GetFontVMetrics(Font->stbFontInfo, &ascent, &descent, &lineGap);
@@ -1022,7 +1218,22 @@ WriteFonts(void)
 		LoadFont("c:/Windows/Fonts/arial.ttf", "Arial", 128),
 		LoadFont("c:/Windows/Fonts/LiberationMono-Regular.ttf", "Liberation Mono", 20),
 	};
+#elif USE_FONTS_FROM_XWINDOWS
+	// NOTE: LoadFont FileName and FontName parameters are used to select
+	// the font, using XLoadFont, from the list of available fonts (a list
+	// of available fonts can be shown using the terminal command "xlsfonts")
+    // NOTE: xlib core fonts are not vector fonts, so only certain sizes
+	// are available, the little r stands for roman (i.e. not italic),
+	// see "http://www.x.org/releases/X11R7.7/doc/xorg-docs/xlfd/xlfd.html"
+	// for details of the XLoadFont selection string
+	loaded_font *Fonts[] =
+	{
+		LoadFont("helvetica-bold-r", "34", 0),
+		LoadFont("liberation mono-bold-r", "34", 0),
+	};
 #else
+	// NOTE: not sure why stb_truetype can't find the kanji glyphs, they
+	// exist in the ttf files
     loaded_font *Fonts[] =
 	{
 		LoadFont("arial.ttf", "Arial", 128),

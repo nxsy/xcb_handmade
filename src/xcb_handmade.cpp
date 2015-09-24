@@ -1392,15 +1392,8 @@ PLATFORM_DEALLOCATE_MEMORY(hhxcbDeallocateMemory)
     }
 }
 
-inline void
-hhxcbRecordTimestamp(debug_frame_end_info *Info, char *Name, r32 Seconds)
-{
-    Assert(Info->TimestampCount < ArrayCount(Info->Timestamps));
-
-    debug_frame_timestamp *Timestamp = Info->Timestamps + Info->TimestampCount++;
-    Timestamp->Name = Name;
-    Timestamp->Seconds = Seconds;
-}
+global_variable debug_table GlobalDebugTable_;
+debug_table *GlobalDebugTable = &GlobalDebugTable_;
 
 int
 main()
@@ -1591,7 +1584,13 @@ main()
 	uint64 LastCycleCount = __rdtsc();
     while(!context.ending_flag)
     {
-		debug_frame_end_info FrameEndInfo = {};
+		FRAME_MARKER();
+
+		//
+		//
+		//
+
+		BEGIN_BLOCK(ExecutableRefresh);
 		
         if (last_counter.tv_sec >= next_controller_refresh)
         {
@@ -1605,18 +1604,31 @@ main()
         {
 			hhxcbCompleteAllWork(&HighPriorityQueue);
 			hhxcbCompleteAllWork(&LowPriorityQueue);
-			
+
+			GlobalDebugTable = &GlobalDebugTable_;
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
         }
-		
-		hhxcbRecordTimestamp(&FrameEndInfo, "ExecutableReady", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
+
+		END_BLOCK(ExecutableRefresh);
+
+		//
+		//
+		//
+
+		BEGIN_BLOCK(InputProcessing);
 		
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, new_input, old_input);
 
-		hhxcbRecordTimestamp(&FrameEndInfo, "InputProcessed", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
+		END_BLOCK(InputProcessing);
+
+		//
+		//
+		//
+
+		BEGIN_BLOCK(GameUpdate);
 		
 		// NOTE: setup game_buffer.Memory upside down and set
 		// game_buffer.pitch negative, so the game would fill the
@@ -1644,8 +1656,14 @@ main()
             //HandleDebugCycleCounter(&m);
         }
 
-		hhxcbRecordTimestamp(&FrameEndInfo, "GameUpdated", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
+		END_BLOCK(GameUpdate);
 
+		//
+		//
+		//
+
+		BEGIN_BLOCK(AudioUpdate);
+		
 		snd_pcm_sframes_t delay, avail;
         snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
 		u32 samplesToFill = 0;
@@ -1696,8 +1714,14 @@ main()
 		printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
 #endif
 
-		hhxcbRecordTimestamp(&FrameEndInfo, "AudioUpdated", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
-				
+		END_BLOCK(AudioUpdate);
+
+		//
+		//
+		//
+
+		BEGIN_BLOCK(FramerateWait);
+		
         xcb_image_put(context.connection, buffer.xcb_pixmap_id,
                 buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
         xcb_flush(context.connection);
@@ -1745,8 +1769,14 @@ main()
             clock_gettime(HHXCB_CLOCK, &spin_counter);
         }
 
-		hhxcbRecordTimestamp(&FrameEndInfo, "FrameWaitComplete", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
+		END_BLOCK(FramerateWait);
 
+		//
+		//
+		//
+
+		BEGIN_BLOCK(FrameDisplay);
+		
         timespec end_counter = hhxcbGetWallClock();
 
         long ns_per_frame = end_counter.tv_nsec - last_counter.tv_nsec;
@@ -1776,18 +1806,22 @@ main()
 
 		printf("%.02fms/f,  %.02ff/s,  %.02fmc/f\n", ms_per_frame, FPS, MCPF);
 #endif
-
+		END_BLOCK(FrameDisplay);
+		
 #if HANDMADE_INTERNAL
-		hhxcbRecordTimestamp(&FrameEndInfo, "EndOfFrame", hhxcbGetSecondsElapsed(last_counter, hhxcbGetWallClock()));
-
 		uint64 EndCycleCount = __rdtsc();
 		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
 		LastCycleCount = EndCycleCount;
 
 		if(game_code.DEBUGFrameEnd)
 		{
-			game_code.DEBUGFrameEnd(&m, &FrameEndInfo);
+			GlobalDebugTable = game_code.DEBUGFrameEnd(&m);
+
+			// TODO: Move this to a global variable so that
+			// there can be timers below this one?
+			GlobalDebugTable->RecordCount[TRANSLATION_UNIT_INDEX] = __COUNTER__;
 		}
+		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 #endif
     }
 

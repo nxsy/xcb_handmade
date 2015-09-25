@@ -1584,11 +1584,8 @@ main()
 
     int64_t next_controller_refresh = 0;
 	
-	uint64 LastCycleCount = __rdtsc();
     while(!context.ending_flag)
     {
-		FRAME_MARKER();
-
 		//
 		//
 		//
@@ -1780,16 +1777,6 @@ main()
 
 		BEGIN_BLOCK(FrameDisplay);
 		
-        timespec end_counter = hhxcbGetWallClock();
-
-        long ns_per_frame = end_counter.tv_nsec - last_counter.tv_nsec;
-        if (ns_per_frame < 0)
-        {
-            ns_per_frame += (1000 * 1000 * 1000) * (end_counter.tv_sec - last_counter.tv_sec);
-        }
-        last_counter = end_counter;
-        real32 ms_per_frame = ns_per_frame / (1000 * 1000.0);
-
         xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window,
                 buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width,
                 buffer.xcb_image->height);
@@ -1799,33 +1786,29 @@ main()
         new_input = old_input;
         old_input = temp_input;
 
-#if 0
-		uint64 EndCycleCount = __rdtsc();
-		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
-		LastCycleCount = EndCycleCount;
-                    
-		real64 FPS = 1000.0f / ms_per_frame;
-		real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
-
-		printf("%.02fms/f,  %.02ff/s,  %.02fmc/f\n", ms_per_frame, FPS, MCPF);
-#endif
 		END_BLOCK(FrameDisplay);
 		
 #if HANDMADE_INTERNAL
-		uint64 EndCycleCount = __rdtsc();
-		uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
-		LastCycleCount = EndCycleCount;
-
+		BEGIN_BLOCK(DebugCollation);
+		
 		if(game_code.DEBUGFrameEnd)
 		{
 			GlobalDebugTable = game_code.DEBUGFrameEnd(&m);
+		}
+		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 
+		END_BLOCK(DebugCollation);
+#endif
+        timespec end_counter = hhxcbGetWallClock();
+		FRAME_MARKER(hhxcbGetSecondsElapsed(last_counter, end_counter));
+        last_counter = end_counter;
+
+		if(GlobalDebugTable)
+		{
 			// TODO: Move this to a global variable so that
 			// there can be timers below this one?
 			GlobalDebugTable->RecordCount[TRANSLATION_UNIT_INDEX] = __COUNTER__;
 		}
-		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
-#endif
     }
 
     snd_pcm_close(context.alsa_handle);

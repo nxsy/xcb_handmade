@@ -1066,6 +1066,9 @@ ThreadFunction(void* arg)
 {
 	platform_work_queue* Queue = (platform_work_queue*)arg;
 
+	u32 TestThreadID = GetThreadID();
+    Assert(TestThreadID == (u32)pthread_self());
+
 	for(;;)
 	{
 		if(hhxcbDoNextWorkQueueEntry(Queue))

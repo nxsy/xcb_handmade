@@ -549,7 +549,7 @@ hhxcb_process_keyboard_message(game_button_state *new_state, bool32 is_down)
 }
 
 internal void
-hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new_input, game_input *old_input)
+hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen_buffer *buffer, game_input *new_input, game_input *old_input)
 {
     game_controller_input *old_keyboard_controller = GetController(old_input, 0);
     game_controller_input *new_keyboard_controller = GetController(new_input, 0);
@@ -566,6 +566,14 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
 
     new_input->MouseX = old_input->MouseX;
     new_input->MouseY = old_input->MouseY;
+	
+	for(u32 ButtonIndex = 0;
+		ButtonIndex < PlatformMouseButton_Count;
+		++ButtonIndex)
+	{
+		new_input->MouseButtons[ButtonIndex] = old_input->MouseButtons[ButtonIndex];
+		new_input->MouseButtons[ButtonIndex].HalfTransitionCount = 0;
+	}
 
     for (int i = 0; i < HHXCB_MAX_CONTROLLERS; ++i)
     {
@@ -795,6 +803,17 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
                 }
                 break;
             }
+		    case XCB_BUTTON_PRESS:
+		    case XCB_BUTTON_RELEASE:
+			{
+                xcb_button_press_event_t *e = (xcb_button_press_event_t *)event;
+                bool32 is_down = (response_type == XCB_BUTTON_PRESS);
+				if((e->detail >= 1) && (e->detail <= 5))
+				{
+					u32 mouseButtonIndex = (e->detail - 1);
+					hhxcb_process_keyboard_message(&new_input->MouseButtons[mouseButtonIndex], is_down);
+				}
+			}
             case XCB_NO_EXPOSURE:
             {
                 // No idea what these are, but they're spamming me.
@@ -803,8 +822,8 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, game_input *new
             case XCB_MOTION_NOTIFY:
             {
                 xcb_motion_notify_event_t* e = (xcb_motion_notify_event_t*)event;
-                new_input->MouseX = e->event_x;
-                new_input->MouseY = e->event_y;
+                new_input->MouseX = (-0.5f*(r32)buffer->width + 0.5f) + (r32)e->event_x;
+                new_input->MouseY = (0.5f*(r32)buffer->height + 0.5f) - (r32)e->event_y;
                 break;
             }
             case XCB_CLIENT_MESSAGE:
@@ -1450,6 +1469,8 @@ main()
             | XCB_EVENT_MASK_POINTER_MOTION
             | XCB_EVENT_MASK_KEY_PRESS
             | XCB_EVENT_MASK_KEY_RELEASE
+		    | XCB_EVENT_MASK_BUTTON_PRESS
+		    | XCB_EVENT_MASK_BUTTON_RELEASE
             ,
     };
 
@@ -1620,7 +1641,7 @@ main()
 		
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
-        hhxcb_process_events(&context, &state, new_input, old_input);
+        hhxcb_process_events(&context, &state, &buffer, new_input, old_input);
 
 		END_BLOCK(InputProcessing);
 

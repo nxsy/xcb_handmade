@@ -1740,7 +1740,9 @@ main()
 		//
 		//
 		//
-
+		
+// TODO: Leave this off until we have actual vblank support?
+#if 0
 		BEGIN_BLOCK(FramerateWait);
 		
         timespec target_counter = {};
@@ -1787,7 +1789,8 @@ main()
         }
 
 		END_BLOCK(FramerateWait);
-
+#endif
+		
 		//
 		//
 		//

@@ -1743,10 +1743,6 @@ main()
 
 		BEGIN_BLOCK(FramerateWait);
 		
-        xcb_image_put(context.connection, buffer.xcb_pixmap_id,
-                buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
-        xcb_flush(context.connection);
-		
         timespec target_counter = {};
         target_counter.tv_sec = last_counter.tv_sec;
         target_counter.tv_nsec = last_counter.tv_nsec + target_nanoseconds_per_frame;
@@ -1797,11 +1793,14 @@ main()
 		//
 
 		BEGIN_BLOCK(FrameDisplay);
+
+		// NOTE: copy xcb_image to pixmap
+		xcb_image_put(context.connection, buffer.xcb_pixmap_id, buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
+        //xcb_flush(context.connection);
 		
-        xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window,
-                buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width,
-                buffer.xcb_image->height);
-        xcb_flush(context.connection);
+		// NOTE: copy pixmap to window
+		xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window, buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width, buffer.xcb_image->height);
+		//xcb_flush(context.connection);
 
         game_input *temp_input = new_input;
         new_input = old_input;

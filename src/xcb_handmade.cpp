@@ -1754,7 +1754,17 @@ main()
         }
         if (state.playback_index)
         {
+			game_input temp = *new_input;
             hhxcb_playback_input(&state, new_input);
+			for(u32 MouseButtonIndex = 0;
+				MouseButtonIndex < PlatformMouseButton_Count;
+				++MouseButtonIndex)
+			{
+				new_input->MouseButtons[MouseButtonIndex] = temp.MouseButtons[MouseButtonIndex];
+			}
+			new_input->MouseX = temp.MouseX;
+			new_input->MouseY = temp.MouseY;
+			new_input->MouseZ = temp.MouseZ;
         }
         if (game_code.UpdateAndRender)
         {

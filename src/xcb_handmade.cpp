@@ -42,7 +42,8 @@
 // Note: this gives a compiler error for "_Atomic"
 //#include <stdatomic.h>// atomic_fetch_add, etc...
 #include <dirent.h>   // opendir, readdir, closedir
-	
+#include <wait.h>     // waitpid
+
 #include <xcb/xcb.h>
 
 /*
@@ -259,6 +260,85 @@ DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_xcb_write_entire_file)
     fclose(f);
 
     return res == MemorySize;
+}
+
+internal b32
+hhxcbSearchString(char *StringToBeSearched, char *StringToSearchFor)
+{
+	u32 MatchIndex = 0;
+	for(u32 charAt = 0;
+		StringToBeSearched[charAt];
+		++charAt)
+	{
+		if(StringToBeSearched[charAt] == StringToSearchFor[MatchIndex])
+		{
+			++MatchIndex;
+			if(StringToSearchFor[MatchIndex] == 0)
+			{
+				// NOTE: string found
+				return true;
+			}
+		}
+		else
+		{
+			MatchIndex = 0;
+		}
+	}
+	// NOTE: string not found
+	return false;
+}
+
+DEBUG_PLATFORM_EXECUTE_SYSTEM_COMMAND(debug_execute_system_command)
+{
+    debug_executing_process Result = {};
+
+	if(hhxcbSearchString(Command, "cmd.exe"))
+	{
+		Command = "/usr/bin/sh";
+	}
+	if(hhxcbSearchString(CommandLine, "build.bat"))
+	{
+		CommandLine = "../../build.sh";
+	}
+	
+	pid_t forkPID = vfork(); //fork();
+
+	if(forkPID > 0)
+    {
+        Assert(sizeof(Result.OSHandle) >= sizeof(forkPID));
+		Result.OSHandle = forkPID;
+    }
+    else if(forkPID == 0)
+    {
+		execl(Command, Command, CommandLine, (char *)0);
+		
+		// NOTE: make sure this point isn't reached
+		Assert(0);
+    }
+
+    return(Result);
+}
+
+DEBUG_PLATFORM_GET_PROCESS_STATE(debug_get_process_state)
+{
+    debug_process_state Result = {};
+
+    if(Process.OSHandle != 0)
+    {
+        Result.StartedSuccessfully = true;
+		
+		s32 status = 0;
+		if(waitpid(Process.OSHandle, &status, WNOHANG) == 0)
+		{
+            Result.IsRunning = true;
+		}
+		else if(WIFEXITED(status))
+        {
+            Result.ReturnCode = WEXITSTATUS(status);
+		}
+    }
+
+    return(Result);
 }
 
 #endif
@@ -1593,6 +1673,8 @@ main()
     m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;
     m.PlatformAPI.DEBUGReadEntireFile = debug_xcb_read_entire_file;
     m.PlatformAPI.DEBUGWriteEntireFile = debug_xcb_write_entire_file;
+	m.PlatformAPI.DEBUGExecuteSystemCommand = debug_execute_system_command;
+	m.PlatformAPI.DEBUGGetProcessState = debug_get_process_state;
 #endif
 
     hhxcb_init_replays(&state);
@@ -1619,6 +1701,8 @@ main()
             next_controller_refresh = last_counter.tv_sec + 1;
         }
 
+		m.ExecutableReloaded = false;
+
         struct stat library_statbuf = {};
         stat(source_game_code_library_path, &library_statbuf);
         if (library_statbuf.st_mtime != game_code.library_mtime)
@@ -1629,6 +1713,7 @@ main()
 			GlobalDebugTable = &GlobalDebugTable_;
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
+			m.ExecutableReloaded = true;
         }
 
 		END_BLOCK(ExecutableRefresh);

@@ -11,8 +11,37 @@ GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"
 DEBUG_FLAGS="-DDEBUG -g -DHANDMADE_SLOW=1 -DHHXCB_SLOW=1"
 OPT_FLAGS="-Ofast"
 
+
+buildType=""
+dir=`basename $PWD`
+if [ "$dir" == "debug" ]
+then
+	buildType="debug"
+	cd ../..
+fi
+
+if [ "$dir" == "opt" ]
+then
+	buildType="opt"
+	cd ../..
+fi
+
+dir=`basename $PWD`
+if [ "$dir" == "src" ]
+then
+	cd ..
+fi
+
+dir=`basename $PWD`
+if [ "$dir" != "xcb_handmade" ]
+then
+	exit
+fi
+
 mkdir -p build
 
+if [ "$buildType" != "opt" ]
+then
 
 ### Debug build
 
@@ -36,6 +65,10 @@ g++ -std=c++0x -DTRANSLATION_UNIT_INDEX=2 ${WARNFLAGS} -o build/debug/xcb_handma
 ## Alternate platform code build
 #g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/debug/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
 
+fi
+
+if [ "$buildType" != "debug" ]
+then
 
 ### Optimized build
 
@@ -58,3 +91,5 @@ g++ -std=c++0x -DTRANSLATION_UNIT_INDEX=2 ${WARNFLAGS} -o build/opt/xcb_handmade
 
 ## Alternate platform code build
 #g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/opt/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}
+
+fi

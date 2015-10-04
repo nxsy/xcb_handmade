@@ -50,7 +50,7 @@ then
 
 mkdir -p build/debug
 ## Asset file builder
-#g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
+g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
 ## Optimized renderer build
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=1 ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library
@@ -77,7 +77,7 @@ then
 
 mkdir -p build/opt
 ## Asset file builder
-#g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
+g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
 ## Optimized renderer
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=1 ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library

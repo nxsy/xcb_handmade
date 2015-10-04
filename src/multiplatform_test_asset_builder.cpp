@@ -681,7 +681,7 @@ LoadGlyphBitmap(loaded_font *Font, u32 CodePoint, hha_asset *Asset)
 	r32 HeightAboveBaseline = (r32)(Baseline - MaxY);
 	// NOTE: this moves the alignment of all the text down, so part of the
 	// top line isn't cut off
-	r32 FontOffset = Baseline / 4;
+	r32 FontOffset = Baseline / 6;
 	Asset->Bitmap.AlignPercentage[1] = (-HeightAboveBaseline + FontOffset) / (r32)Result.Height;
 
 	for(u32 OtherGlyphIndex = 0;

@@ -212,7 +212,7 @@ load_atoms(hhxcb_context *context)
     context->wm_delete_window = wm_delete_window_cookie_reply->atom;
 }
 
-#ifdef HANDMADE_INTERNAL
+#if HANDMADE_INTERNAL
 DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_xcb_free_file_memory)
 {
     free(Memory);
@@ -366,7 +366,7 @@ hhxcbGetSecondsElapsed(timespec start, timespec end)
 internal void
 HandleDebugCycleCounter(game_memory* m)
 {
-#ifdef HANDMADE_INTERNAL
+#if HANDMADE_INTERNAL
 	printf("DEBUG CYCLE COUNTS:\n");
 	
 	for(uint CounterIndex =0;
@@ -1494,8 +1494,10 @@ PLATFORM_DEALLOCATE_MEMORY(hhxcbDeallocateMemory)
     }
 }
 
+#if HANDMADE_INTERNAL
 global_variable debug_table GlobalDebugTable_;
 debug_table *GlobalDebugTable = &GlobalDebugTable_;
+#endif
 
 int
 main()
@@ -1669,7 +1671,7 @@ main()
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
 	
-#ifdef HANDMADE_INTERNAL
+#if HANDMADE_INTERNAL
     m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;
     m.PlatformAPI.DEBUGReadEntireFile = debug_xcb_read_entire_file;
     m.PlatformAPI.DEBUGWriteEntireFile = debug_xcb_write_entire_file;
@@ -1710,7 +1712,9 @@ main()
 			hhxcbCompleteAllWork(&HighPriorityQueue);
 			hhxcbCompleteAllWork(&LowPriorityQueue);
 
+#if HANDMADE_INTERNAL
 			GlobalDebugTable = &GlobalDebugTable_;
+#endif
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
 			m.ExecutableReloaded = true;
@@ -1836,6 +1840,22 @@ main()
 		//
 		//
 		
+#if HANDMADE_INTERNAL
+		BEGIN_BLOCK(DebugCollation);
+		
+		if(game_code.DEBUGFrameEnd)
+		{
+			GlobalDebugTable = game_code.DEBUGFrameEnd(&m, new_input, &game_buffer);
+		}
+		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
+
+		END_BLOCK(DebugCollation);
+#endif
+		
+		//
+		//
+		//
+		
 // TODO: Leave this off until we have actual vblank support?
 #if 0
 		BEGIN_BLOCK(FramerateWait);
@@ -1906,27 +1926,18 @@ main()
 
 		END_BLOCK(FrameDisplay);
 		
-#if HANDMADE_INTERNAL
-		BEGIN_BLOCK(DebugCollation);
-		
-		if(game_code.DEBUGFrameEnd)
-		{
-			GlobalDebugTable = game_code.DEBUGFrameEnd(&m);
-		}
-		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
-
-		END_BLOCK(DebugCollation);
-#endif
         timespec end_counter = hhxcbGetWallClock();
 		FRAME_MARKER(hhxcbGetSecondsElapsed(last_counter, end_counter));
         last_counter = end_counter;
 
+#if HANDMADE_INTERNAL
 		if(GlobalDebugTable)
 		{
 			// TODO: Move this to a global variable so that
 			// there can be timers below this one?
 			GlobalDebugTable->RecordCount[TRANSLATION_UNIT_INDEX] = __COUNTER__;
 		}
+#endif
     }
 
     snd_pcm_close(context.alsa_handle);

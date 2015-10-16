@@ -902,8 +902,8 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
             case XCB_MOTION_NOTIFY:
             {
                 xcb_motion_notify_event_t* e = (xcb_motion_notify_event_t*)event;
-                new_input->MouseX = (-0.5f*(r32)buffer->width + 0.5f) + (r32)e->event_x;
-                new_input->MouseY = (0.5f*(r32)buffer->height + 0.5f) - (r32)e->event_y;
+                new_input->MouseX = (r32)e->event_x;
+                new_input->MouseY = (r32)((buffer->height -1) - e->event_y);
                 break;
             }
             case XCB_CLIENT_MESSAGE:

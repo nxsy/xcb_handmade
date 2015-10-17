@@ -49,6 +49,8 @@ then
 ### Debug build
 
 mkdir -p build/debug
+## Simple preprocessor
+g++ ${CPPSTD} ${WARNFLAGS} -o build/debug/simple_preprocessor src/simple_preprocessor.cpp ${CPPFLAGS} ${DEBUG_FLAGS}
 ## Asset file builder
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
 ## Optimized renderer build
@@ -76,6 +78,8 @@ then
 ### Optimized build
 
 mkdir -p build/opt
+## Simple preprocessor
+g++ ${CPPSTD} ${WARNFLAGS} -o build/opt/simple_preprocessor src/simple_preprocessor.cpp ${CPPFLAGS}
 ## Asset file builder
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
 ## Optimized renderer

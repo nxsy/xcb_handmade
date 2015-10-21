@@ -9,7 +9,7 @@ Prerequisites
 
 Most importantly, you’ll need Handmade Hero source code for the
 platform-independent game code.  Pre-order the game and get the nightly source
-code.  This revision works with day 198 or later.
+code.  This revision works with day 207 or later.
 
 You will need g++ (tested with g++ 4.6) or other C++ compiler.
 

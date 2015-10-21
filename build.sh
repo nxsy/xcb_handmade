@@ -8,8 +8,9 @@ set -u
 CPPSTD="-std=gnu++11"
 XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lxcb-randr -lasound"
 CPPFLAGS="-pthread -I../iaca/include/ -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
-WARNFLAGS="-Wall -Wno-unused-variable -Wno-unused-but-set-variable\
-	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing -Wno-switch"
+WARNFLAGS="-Wall -Wno-unused-variable -Wno-unused-but-set-variable \
+	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing \
+     -Wno-switch -fpermissive"
 GAMEWARNFLAGS="${WARNFLAGS} -Wno-sign-compare"
 DEBUG_FLAGS="-DDEBUG -g -DHANDMADE_SLOW=1 -DHHXCB_SLOW=1"
 OPT_FLAGS="-Ofast"
@@ -51,8 +52,11 @@ then
 mkdir -p build/debug
 ## Simple preprocessor
 g++ ${CPPSTD} ${WARNFLAGS} -o build/debug/simple_preprocessor src/simple_preprocessor.cpp ${CPPFLAGS} ${DEBUG_FLAGS}
+pushd ../handmade/code
+../../xcb_handmade/build/debug/simple_preprocessor > handmade_generated.h
+popd
 ## Asset file builder
-g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
+#g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
 ## Optimized renderer build
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=1 ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library
@@ -80,8 +84,11 @@ then
 mkdir -p build/opt
 ## Simple preprocessor
 g++ ${CPPSTD} ${WARNFLAGS} -o build/opt/simple_preprocessor src/simple_preprocessor.cpp ${CPPFLAGS}
+pushd ../handmade/code
+../../xcb_handmade/build/opt/simple_preprocessor > handmade_generated.h
+popd
 ## Asset file builder
-g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
+#g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=0 ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
 ## Optimized renderer
 g++ ${CPPSTD} -DTRANSLATION_UNIT_INDEX=1 ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library

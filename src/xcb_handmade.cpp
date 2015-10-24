@@ -1929,15 +1929,6 @@ main()
         timespec end_counter = hhxcbGetWallClock();
 		FRAME_MARKER(hhxcbGetSecondsElapsed(last_counter, end_counter));
         last_counter = end_counter;
-
-#if HANDMADE_INTERNAL
-		if(GlobalDebugTable)
-		{
-			// TODO: Move this to a global variable so that
-			// there can be timers below this one?
-			GlobalDebugTable->RecordCount[TRANSLATION_UNIT_INDEX] = __COUNTER__;
-		}
-#endif
     }
 
     snd_pcm_close(context.alsa_handle);

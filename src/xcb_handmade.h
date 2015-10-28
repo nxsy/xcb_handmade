@@ -101,6 +101,13 @@ struct hhxcb_controller_info {
     int start_button;
 };
 
+enum modifiers
+{
+	MOD_SHIFT,
+	MOD_ALT,
+	MOD_CONTROL,
+};
+
 struct hhxcb_context
 {
     bool32 ending_flag;
@@ -120,6 +127,8 @@ struct hhxcb_context
     bool32 need_controller_refresh;
     hhxcb_controller_info controller_info[HHXCB_MAX_CONTROLLERS];
 
+	game_button_state modifier_keys[3];
+	
     snd_pcm_t *alsa_handle;
     snd_output_t *alsa_log;
 };

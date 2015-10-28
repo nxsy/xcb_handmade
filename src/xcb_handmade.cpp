@@ -646,6 +646,11 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
 
     new_input->MouseX = old_input->MouseX;
     new_input->MouseY = old_input->MouseY;
+    new_input->MouseZ = old_input->MouseZ;
+
+	new_input->ShiftDown = context->modifier_keys[MOD_SHIFT].EndedDown;
+	new_input->AltDown = context->modifier_keys[MOD_ALT].EndedDown;
+	new_input->ControlDown = context->modifier_keys[MOD_CONTROL].EndedDown;
 	
 	for(u32 ButtonIndex = 0;
 		ButtonIndex < PlatformMouseButton_Count;
@@ -858,6 +863,18 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 else if (keysym == XK_space)
                 {
                     hhxcb_process_keyboard_message(&new_keyboard_controller->Start, is_down);
+                }
+                else if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R))
+                {
+                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_SHIFT], is_down);
+                }
+                else if ((keysym == XK_Alt_L) || (keysym == XK_Alt_R))
+                {
+                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_ALT], is_down);
+                }
+                else if ((keysym == XK_Control_L) || (keysym == XK_Control_R))
+                {
+                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_CONTROL], is_down);
                 }
                 else if (keysym == XK_l)
                 {

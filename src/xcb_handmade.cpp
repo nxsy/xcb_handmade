@@ -25,6 +25,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+  TODO: implemented in casey's platform layer, but not this one yet
+
+   -fullscreen toggle
+   -desktop fade in/out
+*/
+
 #include <sys/mman.h> // mmap, PROT_*, MAP_*
 #include <sys/stat.h> // stat, fstat
 
@@ -129,7 +136,8 @@ hhxcb_create_image(uint32_t pitch, uint32_t width, uint32_t height,
 				   xcb_format_t *fmt, const xcb_setup_t *setup)
 {
     size_t image_size = pitch * height;
-    uint8_t *image_data = (uint8_t *)malloc(image_size);
+    uint8_t *image_data = (uint8_t *)calloc(1, image_size);
+    //uint8_t *image_data = (uint8_t *)malloc(image_size);
 
      return xcb_image_create(width, height, XCB_IMAGE_FORMAT_Z_PIXMAP,
              fmt->scanline_pad, fmt->depth, fmt->bits_per_pixel, 0,
@@ -1573,7 +1581,7 @@ main()
             ,
     };
 
-#if 0
+#if 1
 #define START_WIDTH 960
 #define START_HEIGHT 540
 #else
@@ -1790,6 +1798,10 @@ main()
         if (game_code.UpdateAndRender)
         {
             game_code.UpdateAndRender(&m, new_input, &game_buffer);
+			if(new_input->QuitRequested)
+			{
+				context.ending_flag = true;
+			}
             //HandleDebugCycleCounter(&m);
         }
 

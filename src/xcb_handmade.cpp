@@ -28,8 +28,9 @@
 /*
   TODO: implemented in casey's platform layer, but not this one yet
 
-   -fullscreen toggle
-   -desktop fade in/out
+   - fullscreen toggle
+   - desktop fade in/out
+   - replace xcb with xlib
 */
 
 #include <sys/mman.h> // mmap, PROT_*, MAP_*
@@ -52,6 +53,9 @@
 #include <wait.h>     // waitpid
 
 #include <xcb/xcb.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xlib-xcb.h>
 
 /*
  * Some versions of this header use class as a function argument name, which
@@ -72,6 +76,8 @@
 #include <linux/joystick.h>
 
 #include <alsa/asoundlib.h>
+
+#include <GL/glx.h>
 
 #include "handmade_platform.h"
 #include "xcb_handmade.h"
@@ -1109,6 +1115,41 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
     snd_pcm_dump(context->alsa_handle, context->alsa_log);
 }
 
+internal void
+hhxcbInitOpenGL(hhxcb_context context)
+{
+	s32 DesiredPixelFormat[32] = {	
+		GLX_RGBA,
+		GLX_RED_SIZE, 8,
+		GLX_GREEN_SIZE, 8,
+		GLX_BLUE_SIZE, 8,
+		GLX_ALPHA_SIZE, 8,
+		GLX_DEPTH_SIZE, 24, // NOTE: not sure what to set this at
+		GLX_STENCIL_SIZE, 8, // NOTE: not sure what to set this at
+		GLX_DOUBLEBUFFER,
+		None
+	};
+
+	s32 screen = DefaultScreen(context.display);
+    XVisualInfo *ChosenVisualInfo = glXChooseVisual(context.display,
+													screen,
+													DesiredPixelFormat);
+	GLXContext OpenGLContext = glXCreateContext(context.display,
+												ChosenVisualInfo,
+												NULL, True);
+    XFree(ChosenVisualInfo);
+
+	if(glXMakeCurrent(context.display, context.window, OpenGLContext))
+	{
+		// NOTE(casey): Success!!!
+	}
+	else
+	{
+		InvalidCodePath;
+		// TODO(casey): Diagnostic
+	}
+}
+
 struct platform_work_queue_entry
 {
 	platform_work_queue_callback* Callback;
@@ -1542,8 +1583,10 @@ main()
     hhxcb_context context = {};
 
     /* Open the connection to the X server. Use the DISPLAY environment variable */
-    int screenNum;
-    context.connection = xcb_connect (NULL, &screenNum);
+//    int screenNum;
+//    context.connection = xcb_connect (NULL, &screenNum);
+	context.display = XOpenDisplay(0);
+	context.connection = XGetXCBConnection(context.display);
 
     context.key_symbols = xcb_key_symbols_alloc(context.connection);
 
@@ -1620,6 +1663,8 @@ main()
     hhxcb_resize_backbuffer(&context, &buffer, START_WIDTH, START_HEIGHT);
 
     xcb_flush(context.connection);
+
+	hhxcbInitOpenGL(context);
 
     hhxcb_sound_output sound_output = {};
     sound_output.samples_per_second = 48000;
@@ -1941,6 +1986,8 @@ main()
 
 		BEGIN_BLOCK(FrameDisplay);
 
+		// NOTE: switch between xwindows display and opengl display
+#if 0
 		// NOTE: copy xcb_image to pixmap
 		xcb_image_put(context.connection, buffer.xcb_pixmap_id, buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
         //xcb_flush(context.connection);
@@ -1948,6 +1995,12 @@ main()
 		// NOTE: copy pixmap to window
 		xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window, buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width, buffer.xcb_image->height);
 		//xcb_flush(context.connection);
+#else
+		glViewport(0, 0, buffer.xcb_image->width, buffer.xcb_image->height);
+		glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glXSwapBuffers(context.display, context.window);
+#endif
 
         game_input *temp_input = new_input;
         new_input = old_input;

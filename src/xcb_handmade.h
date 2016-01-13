@@ -117,6 +117,7 @@ struct hhxcb_context
     xcb_connection_t *connection;
     xcb_key_symbols_t *key_symbols;
     xcb_window_t window;
+	Display *display;
 
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_window;

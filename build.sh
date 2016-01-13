@@ -6,7 +6,7 @@ set -u
 ## was using c++11, but it didn't like variadic macros leaving a trailing
 ## comma if the "__VA_ARGS__" was empty, so I switched to gnu++11
 CPPSTD="-std=gnu++11"
-XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lxcb-randr -lasound"
+XCBLIBS="-lrt -lm -ldl -lxcb -lxcb-image -lxcb-icccm -lxcb-keysyms -lxcb-randr -lasound -lGL -lX11 -lX11-xcb"
 CPPFLAGS="-pthread -I../iaca/include/ -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 WARNFLAGS="-Wall -Wno-unused-variable -Wno-unused-but-set-variable \
 	 -Wno-write-strings -Wno-unused-function -Wno-strict-aliasing \

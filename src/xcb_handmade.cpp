@@ -84,6 +84,7 @@
 #include "xcb_handmade.h"
 #include "handmade_intrinsics.h"
 #include "handmade_math.h"
+#include "handmade_opengl.cpp"
 
 #define internal static
 #define local_persist static
@@ -1189,6 +1190,8 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	xcb_copy_area(context->connection, buffer->xcb_pixmap_id, context->window, buffer->xcb_gcontext_id, 0,0, 0, 0, buffer->xcb_image->width, buffer->xcb_image->height);
 	//xcb_flush(context->connection);
 #else
+
+#if 0
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	glBindTexture(GL_TEXTURE_2D, context->openGLTextureHandle);
@@ -1259,7 +1262,8 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	glVertex2f(MinP.x, MaxP.y);
 		
 	glEnd();
-
+#endif
+    
 	glXSwapBuffers(context->display, context->window);
 #endif
 }
@@ -1856,6 +1860,7 @@ main()
 
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
+    m.PlatformAPI.RenderToOpenGL = OpenGLRenderGroupToOutput;
 	
 #if HANDMADE_INTERNAL
     m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;

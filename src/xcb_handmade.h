@@ -72,10 +72,21 @@ struct hhxcb_offscreen_buffer
     xcb_gcontext_t xcb_gcontext_id;
 
     void *memory;
-    int width;
-    int height;
-    int pitch;
-    int bytes_per_pixel;
+    s32 width;
+    s32 height;
+    s32 pitch;
+    s32 bytes_per_pixel;
+};
+
+struct hhxcb_window_dimension
+{
+	Window rootWindow;
+	s32 x;
+	s32 y;
+	u32 width;
+	u32 height;
+	u32 borderWidth;
+	u32 depth;
 };
 
 struct hhxcb_controller_info {
@@ -119,6 +130,8 @@ struct hhxcb_context
     xcb_window_t window;
 	Display *display;
 
+	GLuint openGLTextureHandle;
+	
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_window;
 

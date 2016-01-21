@@ -31,6 +31,7 @@
    - fullscreen toggle
    - desktop fade in/out
    - replace xcb with xlib
+   - get window resize working properly
 */
 
 #include <sys/mman.h> // mmap, PROT_*, MAP_*
@@ -97,6 +98,8 @@
 #endif
 #define _HHXCB_QUOTE2(X) #X
 #define _HHXCB_QUOTE(X) _HHXCB_QUOTE2(X)
+
+#define SOFTWARE_RENDER 0
 
 internal real32
 hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)
@@ -813,23 +816,19 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
             context->need_controller_refresh = true;
         }
     }
-
-    xcb_generic_event_t *event;
-    while ((event = xcb_poll_for_event(context->connection)))
+    
+    XEvent event;
+    while (XPending(context->display))
     {
-        // NOTE(nbm): The high-order bit of response_type is whether the event
-        // is synthetic.  I'm not sure I care, but let's grab it in case.
-        bool32 synthetic_event = (event->response_type & 0x80) != 0;
-        uint8_t response_type = event->response_type & ~0x80;
-        switch(response_type)
+		XNextEvent(context->display, &event);
+        switch(event.type)
         {
-            case XCB_KEY_PRESS:
-            case XCB_KEY_RELEASE:
+            case KeyPress:
+            case KeyRelease:
             {
-                xcb_key_press_event_t *e = (xcb_key_press_event_t *)event;
-                bool32 is_down = (response_type == XCB_KEY_PRESS);
-                xcb_keysym_t keysym = xcb_key_symbols_get_keysym(context->key_symbols, e->detail, 0);
-
+                XKeyEvent *e = (XKeyEvent *)&event;
+                bool32 is_down = (event.type == KeyPress);
+				KeySym keysym = XLookupKeysym(e, 0);
                 if (keysym == XK_w)
                 {
                     hhxcb_process_keyboard_message(&new_keyboard_controller->MoveUp, is_down);
@@ -914,36 +913,36 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 }
                 break;
             }
-		    case XCB_BUTTON_PRESS:
-		    case XCB_BUTTON_RELEASE:
-			{
-                xcb_button_press_event_t *e = (xcb_button_press_event_t *)event;
-                bool32 is_down = (response_type == XCB_BUTTON_PRESS);
-				if((e->detail >= 1) && (e->detail <= 5))
-				{
-					u32 mouseButtonIndex = (e->detail - 1);
-					hhxcb_process_keyboard_message(&new_input->MouseButtons[mouseButtonIndex], is_down);
-				}
-			}
-            case XCB_NO_EXPOSURE:
+            case ButtonPress:
+            case ButtonRelease:
+            {
+                XButtonEvent *e = (XButtonEvent *)&event;
+                bool32 is_down = (event.type == ButtonPress);
+                if((e->button >= 1) && (e->button <= 5))
+                {
+                    u32 mouseButtonIndex = (e->button - 1);
+                    hhxcb_process_keyboard_message(&new_input->MouseButtons[mouseButtonIndex], is_down);
+                }
+            }
+            case NoExpose:
             {
                 // No idea what these are, but they're spamming me.
                 break;
             }
-            case XCB_MOTION_NOTIFY:
+            case MotionNotify:
             {
-                xcb_motion_notify_event_t* e = (xcb_motion_notify_event_t*)event;
-                new_input->MouseX = (r32)e->event_x;
-                new_input->MouseY = (r32)((buffer->height -1) - e->event_y);
+                XMotionEvent *e = (XMotionEvent *)&event;
+                new_input->MouseX = (r32)e->x;
+                new_input->MouseY = (r32)((buffer->height -1) - e->y);
                 break;
             }
-            case XCB_CLIENT_MESSAGE:
+            case ClientMessage:
             {
-                xcb_client_message_event_t* client_message_event = (xcb_client_message_event_t*)event;
+                XClientMessageEvent *client_message_event = (XClientMessageEvent *)&event;
 
-                if (client_message_event->type == context->wm_protocols)
+                if (client_message_event->message_type == context->wm_protocols)
                 {
-                    if (client_message_event->data.data32[0] == context->wm_delete_window)
+                    if (client_message_event->data.l[0] == context->wm_delete_window)
                     {
                         context->ending_flag = 1;
                         break;
@@ -951,12 +950,19 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 }
                 break;
             }
+            case ResizeRequest:
+            {
+                XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
+                printf("resize: %d %d\n", resize->width, resize->height);
+                hhxcb_resize_backbuffer(context, buffer,
+                                        resize->width, resize->height);
+                break;
+            }
             default:
             {
                 break;
             }
         }
-        free(event);
     };
 }
 
@@ -1116,7 +1122,7 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
 }
 
 internal void
-hhxcbInitOpenGL(hhxcb_context context)
+hhxcbInitOpenGL(hhxcb_context *context)
 {
 	s32 DesiredPixelFormat[32] = {	
 		GLX_RGBA,
@@ -1130,24 +1136,115 @@ hhxcbInitOpenGL(hhxcb_context context)
 		None
 	};
 
-	s32 screen = DefaultScreen(context.display);
-    XVisualInfo *ChosenVisualInfo = glXChooseVisual(context.display,
+	s32 screen = DefaultScreen(context->display);
+	XVisualInfo *ChosenVisualInfo = glXChooseVisual(context->display,
 													screen,
 													DesiredPixelFormat);
-	GLXContext OpenGLContext = glXCreateContext(context.display,
+	GLXContext OpenGLContext = glXCreateContext(context->display,
 												ChosenVisualInfo,
 												NULL, True);
     XFree(ChosenVisualInfo);
 
-	if(glXMakeCurrent(context.display, context.window, OpenGLContext))
+	if(glXMakeCurrent(context->display, context->window, OpenGLContext))
 	{
 		// NOTE(casey): Success!!!
+		glGenTextures(1, &context->openGLTextureHandle);
 	}
 	else
 	{
 		InvalidCodePath;
 		// TODO(casey): Diagnostic
 	}
+}
+
+internal hhxcb_window_dimension
+hhxcbGetWindowDimension(hhxcb_context *context)
+{
+	hhxcb_window_dimension result;
+
+	XGetGeometry(context->display, context->window, &result.rootWindow,
+				 &result.x, &result.y,
+				 &result.width, &result.height,
+				 &result.borderWidth, &result.depth);
+
+	return result;
+}
+
+internal void
+hhxcbDisplayBufferInWindow(hhxcb_context *context,
+						   hhxcb_offscreen_buffer *buffer,
+						   u32 windowWidth, u32 windowHeight)
+{
+    // TODO: figure out whether to use dimensions returned from querying
+    // the window, or the dimensions of the xcb_image backbuffer, neither
+    // do the expected thing after window resize
+	// NOTE: switch between xwindows display and opengl display
+#if SOFTWARE_RENDER
+	// NOTE: copy xcb_image to pixmap
+	xcb_image_put(context->connection, buffer->xcb_pixmap_id, buffer->xcb_gcontext_id, buffer->xcb_image, 0, 0, 0);
+	//xcb_flush(context->connection);
+		
+	// NOTE: copy pixmap to window
+	xcb_copy_area(context->connection, buffer->xcb_pixmap_id, context->window, buffer->xcb_gcontext_id, 0,0, 0, 0, buffer->xcb_image->width, buffer->xcb_image->height);
+	//xcb_flush(context->connection);
+#else
+	glViewport(0, 0, windowWidth, windowHeight);
+
+	glBindTexture(GL_TEXTURE_2D, context->openGLTextureHandle);
+		
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                 buffer->xcb_image->width, buffer->xcb_image->height,
+				 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+				 buffer->xcb_image->data);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		
+	glEnable(GL_TEXTURE_2D);
+		
+	glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+		
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+		
+	glBegin(GL_TRIANGLES);
+
+	r32 p = 1.0f;
+
+	// NOTE: lower triangle
+	glTexCoord2f(0.0f, 0.0f);
+	glVertex2f(-p, -p);
+		
+	glTexCoord2f(1.0f, 0.0f);
+	glVertex2f(p, -p);
+		
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(p, p);
+
+	// NOTE: upper triangle
+	glTexCoord2f(0.0f, 0.0f);
+	glVertex2f(-p, -p);
+		
+	glTexCoord2f(1.0f, 1.0f);
+	glVertex2f(p, p);
+		
+	glTexCoord2f(0.0f, 1.0f);
+	glVertex2f(-p, p);
+		
+	glEnd();
+
+	glXSwapBuffers(context->display, context->window);
+#endif
 }
 
 struct platform_work_queue_entry
@@ -1616,21 +1713,23 @@ main()
     {
         screen->black_pixel, //0x0000ffff,
         0
-            | XCB_EVENT_MASK_POINTER_MOTION
-            | XCB_EVENT_MASK_KEY_PRESS
-            | XCB_EVENT_MASK_KEY_RELEASE
-		    | XCB_EVENT_MASK_BUTTON_PRESS
-		    | XCB_EVENT_MASK_BUTTON_RELEASE
-            ,
+		| XCB_EVENT_MASK_POINTER_MOTION
+		| XCB_EVENT_MASK_KEY_PRESS
+		| XCB_EVENT_MASK_KEY_RELEASE
+		| XCB_EVENT_MASK_BUTTON_PRESS
+		| XCB_EVENT_MASK_BUTTON_RELEASE
+		| XCB_EVENT_MASK_RESIZE_REDIRECT
+		,
     };
 
-#if 1
 #define START_WIDTH 960
 #define START_HEIGHT 540
-#else
-#define START_WIDTH 1920
-#define START_HEIGHT 1080
-#endif
+	
+//#define START_WIDTH 1920
+//#define START_HEIGHT 1080
+
+//#define START_WIDTH 1279
+//#define START_HEIGHT 719
 	
     context.window = xcb_generate_id(context.connection);
 	// NOTE: changed to not have a border width, so the min/max/close
@@ -1664,7 +1763,7 @@ main()
 
     xcb_flush(context.connection);
 
-	hhxcbInitOpenGL(context);
+	hhxcbInitOpenGL(&context);
 
     hhxcb_sound_output sound_output = {};
     sound_output.samples_per_second = 48000;
@@ -1809,18 +1908,22 @@ main()
 		//
 
 		BEGIN_BLOCK(GameUpdate);
-		
+
+		game_offscreen_buffer game_buffer = {};
+#if SOFTWARE_RENDER
 		// NOTE: setup game_buffer.Memory upside down and set
 		// game_buffer.pitch negative, so the game would fill the
 		// backbuffer upside down. XCB doesn't seem to have an
 		// option to flip the image.
-		
-        game_offscreen_buffer game_buffer = {};
-        game_buffer.Memory = ((uint8*)buffer.xcb_image->data)+
+		game_buffer.Memory = ((uint8*)buffer.xcb_image->data)+
 			(buffer.pitch*(buffer.height-1));
+        game_buffer.Pitch = -buffer.pitch;
+#else
+		game_buffer.Memory = (uint8*)buffer.xcb_image->data;
+		game_buffer.Pitch = buffer.pitch;
+#endif
         game_buffer.Width = buffer.width;
         game_buffer.Height = buffer.height;
-        game_buffer.Pitch = -buffer.pitch;
 
         if (state.recording_index)
         {
@@ -1986,22 +2089,10 @@ main()
 
 		BEGIN_BLOCK(FrameDisplay);
 
-		// NOTE: switch between xwindows display and opengl display
-#if 0
-		// NOTE: copy xcb_image to pixmap
-		xcb_image_put(context.connection, buffer.xcb_pixmap_id, buffer.xcb_gcontext_id, buffer.xcb_image, 0, 0, 0);
-        //xcb_flush(context.connection);
+		hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
+		hhxcbDisplayBufferInWindow(&context, &buffer,
+                                   dimension.width, dimension.height);
 		
-		// NOTE: copy pixmap to window
-		xcb_copy_area(context.connection, buffer.xcb_pixmap_id, context.window, buffer.xcb_gcontext_id, 0,0, 0, 0, buffer.xcb_image->width, buffer.xcb_image->height);
-		//xcb_flush(context.connection);
-#else
-		glViewport(0, 0, buffer.xcb_image->width, buffer.xcb_image->height);
-		glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glXSwapBuffers(context.display, context.window);
-#endif
-
         game_input *temp_input = new_input;
         new_input = old_input;
         old_input = temp_input;

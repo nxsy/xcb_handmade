@@ -82,6 +82,8 @@
 
 #include "handmade_platform.h"
 #include "xcb_handmade.h"
+#include "handmade_intrinsics.h"
+#include "handmade_math.h"
 
 #define internal static
 #define local_persist static
@@ -953,7 +955,6 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
             case ResizeRequest:
             {
                 XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
-                printf("resize: %d %d\n", resize->width, resize->height);
                 hhxcb_resize_backbuffer(context, buffer,
                                         resize->width, resize->height);
                 break;
@@ -1215,31 +1216,47 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	glLoadIdentity();
 		
 	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-		
+    r32 a = SafeRatio1(2.0f, (r32)buffer->xcb_image->width);
+    r32 b = SafeRatio1(2.0f, (r32)buffer->xcb_image->height);
+	r32 Proj[] =
+	{
+		 a,	 0,	 0,	 0,
+		 0,	 b,	 0,	 0,
+		 0,	 0,	 1,	 0,
+		-1, -1,	 0,	 1,
+	};
+	glLoadMatrixf(Proj);
+
+	// TODO: Decide how we want to handle aspect ratio - black bars
+    // or crop?
+
+	v2 MinP = {0, 0};
+	v2 MaxP = {(r32)buffer->xcb_image->width, (r32)buffer->xcb_image->height};
+	v4 Color = {1, 1, 1, 1};
+
 	glBegin(GL_TRIANGLES);
 
-	r32 p = 1.0f;
+	glColor4f(Color.r, Color.g, Color.b, Color.a);
 
 	// NOTE: lower triangle
 	glTexCoord2f(0.0f, 0.0f);
-	glVertex2f(-p, -p);
+	glVertex2f(MinP.x, MinP.y);
 		
 	glTexCoord2f(1.0f, 0.0f);
-	glVertex2f(p, -p);
+	glVertex2f(MaxP.x, MinP.y);
 		
 	glTexCoord2f(1.0f, 1.0f);
-	glVertex2f(p, p);
+	glVertex2f(MaxP.x, MaxP.y);
 
 	// NOTE: upper triangle
 	glTexCoord2f(0.0f, 0.0f);
-	glVertex2f(-p, -p);
+	glVertex2f(MinP.x, MinP.y);
 		
 	glTexCoord2f(1.0f, 1.0f);
-	glVertex2f(p, p);
+	glVertex2f(MaxP.x, MaxP.y);
 		
 	glTexCoord2f(0.0f, 1.0f);
-	glVertex2f(-p, p);
+	glVertex2f(MinP.x, MaxP.y);
 		
 	glEnd();
 

@@ -84,7 +84,12 @@
 #include "xcb_handmade.h"
 #include "handmade_intrinsics.h"
 #include "handmade_math.h"
+
+global_variable platform_api Platform;
+global_variable GLuint OpenGLDefaultInternalTextureFormat;
+
 #include "handmade_opengl.cpp"
+#include "handmade_render.cpp"
 
 #define internal static
 #define local_persist static
@@ -101,8 +106,6 @@
 #endif
 #define _HHXCB_QUOTE2(X) #X
 #define _HHXCB_QUOTE(X) _HHXCB_QUOTE2(X)
-
-#define SOFTWARE_RENDER 0
 
 internal real32
 hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)
@@ -955,9 +958,11 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
             }
             case ResizeRequest:
             {
+#if 0
                 XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
-                hhxcb_resize_backbuffer(context, buffer,
-                                        resize->width, resize->height);
+                hhxcbDisplayBufferInWindow(context, buffer,
+                                           resize->width, resize->height);
+#endif
                 break;
             }
             default:
@@ -1149,8 +1154,34 @@ hhxcbInitOpenGL(hhxcb_context *context)
 
 	if(glXMakeCurrent(context->display, context->window, OpenGLContext))
 	{
-		// NOTE(casey): Success!!!
-		glGenTextures(1, &context->openGLTextureHandle);
+        OpenGLDefaultInternalTextureFormat = GL_RGBA8;
+        
+		// TODO(casey): Actually check for extensions!
+        u8 *openGLSupport = (u8 *)glXQueryExtensionsString(
+            context->display, DefaultScreen(context->display));
+        printf("\nopenGL: %s\n", openGLSupport);
+        
+//		  if(OpenGLExtensionIsAvailable())
+		{
+            OpenGLDefaultInternalTextureFormat = GL_SRGB8_ALPHA8;
+		}
+
+//		  if(OpenGLExtensionIsAvailable())
+		{
+            glEnable(GL_FRAMEBUFFER_SRGB);
+		}
+        
+		context->glXSwapInterval =
+            (glx_swap_interval_mesa *)glXGetProcAddress(
+                (GLubyte *)"glxSwapIntervalMESA");
+		if(context->glXSwapInterval)
+		{
+            // NOTE: on intel hd4000 intergrated graphics, this doesn't
+            // seem to have any effect.
+            // NOTE: but setting doublebuffer on the openGL graphics
+            // context seems to enable it
+			context->glXSwapInterval(1);
+		}
 	}
 	else
 	{
@@ -1175,97 +1206,92 @@ hhxcbGetWindowDimension(hhxcb_context *context)
 internal void
 hhxcbDisplayBufferInWindow(hhxcb_context *context,
 						   hhxcb_offscreen_buffer *buffer,
-						   u32 windowWidth, u32 windowHeight)
+                           platform_work_queue *RenderQueue,
+                           game_render_commands *Commands,
+						   u32 windowWidth, u32 windowHeight,
+                           void *SortMemory)
 {
-    // TODO: figure out whether to use dimensions returned from querying
-    // the window, or the dimensions of the xcb_image backbuffer, neither
-    // do the expected thing after window resize
+    SortEntries(Commands, SortMemory);
+
+/*  TODO(casey): Do we want to check for resources like before?  Probably? 
+    if(AllResourcesPresent(RenderGroup))
+    {
+        RenderToOutput(TranState->HighPriorityQueue, RenderGroup, 
+        &DrawBuffer, &TranState->TranArena);
+    }
+*/
+
 	// NOTE: switch between xwindows display and opengl display
-#if SOFTWARE_RENDER
-	// NOTE: copy xcb_image to pixmap
-	xcb_image_put(context->connection, buffer->xcb_pixmap_id, buffer->xcb_gcontext_id, buffer->xcb_image, 0, 0, 0);
-	//xcb_flush(context->connection);
-		
-	// NOTE: copy pixmap to window
-	xcb_copy_area(context->connection, buffer->xcb_pixmap_id, context->window, buffer->xcb_gcontext_id, 0,0, 0, 0, buffer->xcb_image->width, buffer->xcb_image->height);
-	//xcb_flush(context->connection);
-#else
+    DEBUG_IF(Renderer_UseSoftware)
+    {
+        loaded_bitmap OutputTarget;
+		// NOTE: setup OutputTarget.Memory upside down and set
+		// game_buffer.pitch negative, so the game would fill the
+		// backbuffer upside down. XCB doesn't seem to have an
+		// option to flip the image.
+		OutputTarget.Memory = ((uint8*)buffer->xcb_image->data)+
+            (buffer->pitch*(buffer->height-1));
+		OutputTarget.Width = buffer->width;
+		OutputTarget.Height = buffer->height;
+		OutputTarget.Pitch = -buffer->pitch;
+
+        b32 DisplayViaHardware = true;        
+        if(DisplayViaHardware)
+		{
+            OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
+            OutputTarget.Pitch = buffer->pitch;
 
 #if 0
-	glViewport(0, 0, windowWidth, windowHeight);
-
-	glBindTexture(GL_TEXTURE_2D, context->openGLTextureHandle);
-		
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-                 buffer->xcb_image->width, buffer->xcb_image->height,
-				 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
-				 buffer->xcb_image->data);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-		
-	glEnable(GL_TEXTURE_2D);
-		
-	glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glMatrixMode(GL_TEXTURE);
-	glLoadIdentity();
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-		
-	glMatrixMode(GL_PROJECTION);
-    r32 a = SafeRatio1(2.0f, (r32)buffer->xcb_image->width);
-    r32 b = SafeRatio1(2.0f, (r32)buffer->xcb_image->height);
-	r32 Proj[] =
-	{
-		 a,	 0,	 0,	 0,
-		 0,	 b,	 0,	 0,
-		 0,	 0,	 1,	 0,
-		-1, -1,	 0,	 1,
-	};
-	glLoadMatrixf(Proj);
-
-	// TODO: Decide how we want to handle aspect ratio - black bars
-    // or crop?
-
-	v2 MinP = {0, 0};
-	v2 MaxP = {(r32)buffer->xcb_image->width, (r32)buffer->xcb_image->height};
-	v4 Color = {1, 1, 1, 1};
-
-	glBegin(GL_TRIANGLES);
-
-	glColor4f(Color.r, Color.g, Color.b, Color.a);
-
-	// NOTE: lower triangle
-	glTexCoord2f(0.0f, 0.0f);
-	glVertex2f(MinP.x, MinP.y);
-		
-	glTexCoord2f(1.0f, 0.0f);
-	glVertex2f(MaxP.x, MinP.y);
-		
-	glTexCoord2f(1.0f, 1.0f);
-	glVertex2f(MaxP.x, MaxP.y);
-
-	// NOTE: upper triangle
-	glTexCoord2f(0.0f, 0.0f);
-	glVertex2f(MinP.x, MinP.y);
-		
-	glTexCoord2f(1.0f, 1.0f);
-	glVertex2f(MaxP.x, MaxP.y);
-		
-	glTexCoord2f(0.0f, 1.0f);
-	glVertex2f(MinP.x, MaxP.y);
-		
-	glEnd();
+            // NOTE: buffer clear
+            u32 *pixel = (u32 *)OutputTarget.Memory;
+            for(u32 verPos = 0;
+                verPos < OutputTarget.Height;
+                ++verPos)
+            {
+                for(u32 horPos = 0;
+                horPos < OutputTarget.Width;
+                ++horPos, ++pixel)
+                {
+                    *pixel = 0x00000000;
+                }
+            }
 #endif
-    
-	glXSwapBuffers(context->display, context->window);
-#endif
+            
+            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+
+            // NOTE: in this path, the bitmap to render is not sRGB format
+            glDisable(GL_FRAMEBUFFER_SRGB);
+			OpenGLDisplayBitmap(OutputTarget.Width,
+                                OutputTarget.Height,
+                                OutputTarget.Memory,
+                                OutputTarget.Pitch,
+                                windowWidth, windowHeight);
+            
+            glXSwapBuffers(context->display, context->window);
+		}
+		else
+		{
+            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+            
+            // NOTE: copy xcb_image to pixmap
+            xcb_image_put(context->connection, buffer->xcb_pixmap_id,
+                          buffer->xcb_gcontext_id, buffer->xcb_image,
+                          0, 0, 0);
+            //xcb_flush(context->connection);
+		
+            // NOTE: copy pixmap to window
+            xcb_copy_area(context->connection, buffer->xcb_pixmap_id,
+                          context->window, buffer->xcb_gcontext_id,
+                          0,0, 0, 0, buffer->xcb_image->width,
+                          buffer->xcb_image->height);
+            //xcb_flush(context->connection);
+        }
+    }
+    else
+    {
+        OpenGLRenderCommands(Commands, windowWidth, windowHeight);
+        glXSwapBuffers(context->display, context->window);
+    }
 }
 
 struct platform_work_queue_entry
@@ -1743,11 +1769,11 @@ main()
 		,
     };
 
-#define START_WIDTH 960
-#define START_HEIGHT 540
+//#define START_WIDTH 960
+//#define START_HEIGHT 540
 	
-//#define START_WIDTH 1920
-//#define START_HEIGHT 1080
+#define START_WIDTH 1920
+#define START_HEIGHT 1080
 
 //#define START_WIDTH 1279
 //#define START_HEIGHT 719
@@ -1795,6 +1821,13 @@ main()
     sound_output.sound_buffer_size = sound_output.sample_count * sound_output.bytes_per_sample;
 	sound_output.safety_samples = (uint32)(((real32)sound_output.samples_per_second / game_update_hz)/3.0f);
     hhxcb_init_alsa(&context, &sound_output);
+
+    umm CurrentSortMemorySize = Megabytes(1);
+    void *SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
+    
+    // TODO(casey): Decide what our pushbuffer size is!
+    u32 PushBufferSize = Megabytes(4);
+    void *PushBuffer = hhxcbAllocateMemory(PushBufferSize);
 	
 	// TODO: remove maxpossibleoverrun
 	u32 MaxPossibleOverrun = 2*8*sizeof(u16);
@@ -1860,7 +1893,6 @@ main()
 
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
-    m.PlatformAPI.RenderToOpenGL = OpenGLRenderGroupToOutput;
 	
 #if HANDMADE_INTERNAL
     m.PlatformAPI.DEBUGFreeFileMemory = debug_xcb_free_file_memory;
@@ -1869,6 +1901,8 @@ main()
 	m.PlatformAPI.DEBUGExecuteSystemCommand = debug_execute_system_command;
 	m.PlatformAPI.DEBUGGetProcessState = debug_get_process_state;
 #endif
+
+    Platform = m.PlatformAPI;
 
     hhxcb_init_replays(&state);
 
@@ -1931,22 +1965,11 @@ main()
 
 		BEGIN_BLOCK(GameUpdate);
 
-		game_offscreen_buffer game_buffer = {};
-#if SOFTWARE_RENDER
-		// NOTE: setup game_buffer.Memory upside down and set
-		// game_buffer.pitch negative, so the game would fill the
-		// backbuffer upside down. XCB doesn't seem to have an
-		// option to flip the image.
-		game_buffer.Memory = ((uint8*)buffer.xcb_image->data)+
-			(buffer.pitch*(buffer.height-1));
-        game_buffer.Pitch = -buffer.pitch;
-#else
-		game_buffer.Memory = (uint8*)buffer.xcb_image->data;
-		game_buffer.Pitch = buffer.pitch;
-#endif
-        game_buffer.Width = buffer.width;
-        game_buffer.Height = buffer.height;
-
+        game_render_commands RenderCommands = RenderCommandStruct(
+            PushBufferSize, PushBuffer,
+            buffer.width,
+            buffer.height);
+        
         if (state.recording_index)
         {
             hhxcb_record_input(&state, new_input);
@@ -1967,7 +1990,7 @@ main()
         }
         if (game_code.UpdateAndRender)
         {
-            game_code.UpdateAndRender(&m, new_input, &game_buffer);
+            game_code.UpdateAndRender(&m, new_input, &RenderCommands);
 			if(new_input->QuitRequested)
 			{
 				context.ending_flag = true;
@@ -2044,7 +2067,7 @@ main()
 		
 		if(game_code.DEBUGFrameEnd)
 		{
-			GlobalDebugTable = game_code.DEBUGFrameEnd(&m, new_input, &game_buffer);
+			GlobalDebugTable = game_code.DEBUGFrameEnd(&m, new_input, &RenderCommands);
 		}
 		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 
@@ -2111,9 +2134,20 @@ main()
 
 		BEGIN_BLOCK(FrameDisplay);
 
+        umm NeededSortMemorySize = RenderCommands.PushBufferElementCount *
+            sizeof(tile_sort_entry);
+        if(CurrentSortMemorySize < NeededSortMemorySize)
+        {
+            hhxcbDeallocateMemory(SortMemory);
+            CurrentSortMemorySize = NeededSortMemorySize;
+            SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
+        }
+
 		hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
 		hhxcbDisplayBufferInWindow(&context, &buffer,
-                                   dimension.width, dimension.height);
+                                   &HighPriorityQueue, &RenderCommands,
+                                   dimension.width, dimension.height,
+                                   SortMemory);
 		
         game_input *temp_input = new_input;
         new_input = old_input;

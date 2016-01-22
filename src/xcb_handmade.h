@@ -72,8 +72,8 @@ struct hhxcb_offscreen_buffer
     xcb_gcontext_t xcb_gcontext_id;
 
     void *memory;
-    s32 width;
-    s32 height;
+    u32 width;
+    u32 height;
     s32 pitch;
     s32 bytes_per_pixel;
 };
@@ -119,6 +119,8 @@ enum modifiers
 	MOD_CONTROL,
 };
 
+typedef u32 glx_swap_interval_mesa(s32 interval);
+
 struct hhxcb_context
 {
     bool32 ending_flag;
@@ -130,8 +132,11 @@ struct hhxcb_context
     xcb_window_t window;
 	Display *display;
 
+    b32 useSoftwareRendering;
+    
 	GLuint openGLTextureHandle;
-	
+    glx_swap_interval_mesa *glXSwapInterval;
+
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_window;
 

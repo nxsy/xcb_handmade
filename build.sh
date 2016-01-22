@@ -57,10 +57,8 @@ pushd ../handmade/code
 popd
 ## Asset file builder
 #g++ ${CPPSTD} ${WARNFLAGS} -o build/debug/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS} -lX11
-## Optimized renderer build
-g++ ${CPPSTD} ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/debug/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library
-g++ ${CPPSTD} ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${DEBUG_FLAGS}
+g++ ${CPPSTD} ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/debug/libhandmade.so.new src/handmade.cpp ${CPPFLAGS} ${DEBUG_FLAGS}
 ## Overwrite the old shared library with the new one
 mv -f build/debug/libhandmade.so.new build/debug/libhandmade.so
 
@@ -89,10 +87,8 @@ pushd ../handmade/code
 popd
 ## Asset file builder
 #g++ ${CPPSTD} ${WARNFLAGS} -o build/opt/multiplatform_test_asset_builder src/multiplatform_test_asset_builder.cpp ${CPPFLAGS} ${XCBLIBS} -lX11
-## Optimized renderer
-g++ ${CPPSTD} ${GAMEWARNFLAGS} -c src/handmade_optimized.cpp -o build/opt/handmade_optimized.o ${CPPFLAGS} -Ofast -fPIC
 ## Shared library
-g++ ${CPPSTD} ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp build/debug/handmade_optimized.o ${CPPFLAGS} ${OPT_FLAGS}
+g++ ${CPPSTD} ${GAMEWARNFLAGS} -shared -Wl,-soname,libhandmade.so.1 -fPIC -o build/opt/libhandmade.so.new src/handmade.cpp ${CPPFLAGS} ${OPT_FLAGS}
 ## Overwrite the old shared library with the new one
 mv -f build/opt/libhandmade.so.new build/opt/libhandmade.so
 

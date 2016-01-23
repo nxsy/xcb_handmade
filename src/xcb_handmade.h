@@ -120,6 +120,7 @@ enum modifiers
 };
 
 typedef u32 glx_swap_interval_mesa(s32 interval);
+typedef GLXContext glx_create_context_attribs_arb(Display *display, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list);
 
 struct hhxcb_context
 {
@@ -136,6 +137,7 @@ struct hhxcb_context
     
 	GLuint openGLTextureHandle;
     glx_swap_interval_mesa *glXSwapInterval;
+    glx_create_context_attribs_arb *glXCreateContextAttribsARB;
 
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_window;

@@ -80,10 +80,14 @@
 
 #include <GL/glx.h>
 
+// NOTE: casey searches for these strings, so if they are defined,
+// the search string will be replaced by the preprocessor
+#undef GL_EXT_texture_sRGB
+#undef GL_EXT_framebuffer_sRGB
+
 #include "handmade_platform.h"
 #include "xcb_handmade.h"
-#include "handmade_intrinsics.h"
-#include "handmade_math.h"
+#include "handmade_shared.h"
 
 global_variable platform_api Platform;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
@@ -1131,56 +1135,104 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
 internal void
 hhxcbInitOpenGL(hhxcb_context *context)
 {
-	s32 DesiredPixelFormat[32] = {	
+	s32 desiredVisualPixelFormat[] =
+    {	
 		GLX_RGBA,
 		GLX_RED_SIZE, 8,
 		GLX_GREEN_SIZE, 8,
 		GLX_BLUE_SIZE, 8,
 		GLX_ALPHA_SIZE, 8,
-		GLX_DEPTH_SIZE, 24, // NOTE: not sure what to set this at
-		GLX_STENCIL_SIZE, 8, // NOTE: not sure what to set this at
+		GLX_DEPTH_SIZE, 24,
+		GLX_STENCIL_SIZE, 8,
 		GLX_DOUBLEBUFFER,
-		None
+		0
 	};
 
 	s32 screen = DefaultScreen(context->display);
 	XVisualInfo *ChosenVisualInfo = glXChooseVisual(context->display,
-													screen,
-													DesiredPixelFormat);
+                              screen,
+                              desiredVisualPixelFormat);
 	GLXContext OpenGLContext = glXCreateContext(context->display,
 												ChosenVisualInfo,
-												NULL, True);
+												0, true);
     XFree(ChosenVisualInfo);
 
 	if(glXMakeCurrent(context->display, context->window, OpenGLContext))
 	{
-        OpenGLDefaultInternalTextureFormat = GL_RGBA8;
-        
-		// TODO(casey): Actually check for extensions!
-        u8 *openGLSupport = (u8 *)glXQueryExtensionsString(
-            context->display, DefaultScreen(context->display));
-        printf("\nopenGL: %s\n", openGLSupport);
-        
-//		  if(OpenGLExtensionIsAvailable())
-		{
-            OpenGLDefaultInternalTextureFormat = GL_SRGB8_ALPHA8;
-		}
+        b32 ModernContext = false;
 
-//		  if(OpenGLExtensionIsAvailable())
-		{
-            glEnable(GL_FRAMEBUFFER_SRGB);
-		}
+        // NOTE: I don't think this "context escalation" is necessary on
+        // *nix, I think you can use glXCreateContextAttribsARB without
+        // first creating a legacy context (tested, and yes you can)
+        context->glXCreateContextAttribsARB =
+            (glx_create_context_attribs_arb *)glXGetProcAddressARB(
+                (GLubyte *)"glXCreateContextAttribsARB");
+        if(context->glXCreateContextAttribsARB)
+        {
+            // NOTE(casey): This is a modern version of OpenGL
+            s32 desiredFBConfigPixelFormat[] = 
+            {
+                GLX_RENDER_TYPE, GLX_RGBA_BIT,
+                GLX_RED_SIZE, 8,
+                GLX_GREEN_SIZE, 8,
+                GLX_BLUE_SIZE, 8,
+                GLX_ALPHA_SIZE, 8,
+                GLX_DEPTH_SIZE, 24,
+                GLX_STENCIL_SIZE, 8,
+                GLX_DOUBLEBUFFER, true,
+                0
+            };
+
+            s32 numberOfConfigsReturned = 0;
+            GLXFBConfig *FBConfig = glXChooseFBConfig(context->display,
+                            DefaultScreen(context->display),
+                            desiredFBConfigPixelFormat,
+                            &numberOfConfigsReturned);
+                
+            int Attribs[] =
+            {
+                GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+                GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+                GLX_CONTEXT_FLAGS_ARB, 0 // NOTE(casey): Enable for testing WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
+#if HANDMADE_INTERNAL
+                |GLX_CONTEXT_DEBUG_BIT_ARB
+#endif
+                ,
+                GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+                0,
+            };
+
+            // NOTE: just use the first FBConfig in the list returned
+            if(numberOfConfigsReturned > 0)
+            {
+                GLXContext ModernOpenGLContext = 
+                    context->glXCreateContextAttribsARB(context->display,
+                                           FBConfig[0], 0, true, Attribs);
+                if(ModernOpenGLContext)
+                {
+                    if(glXMakeCurrent(context->display, context->window,
+                                      ModernOpenGLContext))
+                    {
+                        ModernContext = true;
+                        glXDestroyContext(context->display, OpenGLContext);
+                        OpenGLContext = ModernOpenGLContext;
+                    }
+                }
+            }
+        }
+        else
+        {
+            // NOTE(casey): This is an antiquated version of OpenGL
+        }
+
+        OpenGLInit(ModernContext);
         
 		context->glXSwapInterval =
-            (glx_swap_interval_mesa *)glXGetProcAddress(
-                (GLubyte *)"glxSwapIntervalMESA");
+            (glx_swap_interval_mesa *)glXGetProcAddressARB(
+                (GLubyte *)"glXSwapIntervalMESA");
 		if(context->glXSwapInterval)
 		{
-            // NOTE: on intel hd4000 intergrated graphics, this doesn't
-            // seem to have any effect.
-            // NOTE: but setting doublebuffer on the openGL graphics
-            // context seems to enable it
-			context->glXSwapInterval(1);
+            context->glXSwapInterval(1);
 		}
 	}
 	else

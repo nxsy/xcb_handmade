@@ -92,6 +92,12 @@
 global_variable platform_api Platform;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
 
+global_variable GLXContext globalOpenGLContext;
+global_variable Display *globalDisplay;
+global_variable xcb_window_t globalWindow;
+global_variable GLXFBConfig globalFBConfig;
+global_variable glx_create_context_attribs_arb *glXCreateContextAttribsARB;
+
 #include "handmade_opengl.cpp"
 #include "handmade_render.cpp"
 
@@ -1132,6 +1138,36 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
     snd_pcm_dump(context->alsa_handle, context->alsa_log);
 }
 
+int hhxcbOpenGLAttribs[] =
+{
+    GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+    GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+    GLX_CONTEXT_FLAGS_ARB, 0 // NOTE(casey): Enable for testing WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
+#if HANDMADE_INTERNAL
+    |GLX_CONTEXT_DEBUG_BIT_ARB
+#endif
+    ,
+    GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+    0,
+};
+internal void
+hhxcbCreateOpenGLContextForWorkerThread(void)
+{
+	if(glXCreateContextAttribsARB)
+	{
+        GLXContext shareContext = globalOpenGLContext;
+        GLXContext ModernOpenGLContext = glXCreateContextAttribsARB(globalDisplay, globalFBConfig, shareContext, true, hhxcbOpenGLAttribs);
+        if(ModernOpenGLContext)
+        {
+            if(glXMakeCurrent(globalDisplay, globalWindow,
+                              ModernOpenGLContext))
+            {
+                // TODO(casey): Fatal error?
+            }
+        }
+    }
+}
+
 internal void
 hhxcbInitOpenGL(hhxcb_context *context)
 {
@@ -1188,26 +1224,17 @@ hhxcbInitOpenGL(hhxcb_context *context)
                             DefaultScreen(context->display),
                             desiredFBConfigPixelFormat,
                             &numberOfConfigsReturned);
-                
-            int Attribs[] =
-            {
-                GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-                GLX_CONTEXT_MINOR_VERSION_ARB, 0,
-                GLX_CONTEXT_FLAGS_ARB, 0 // NOTE(casey): Enable for testing WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
-#if HANDMADE_INTERNAL
-                |GLX_CONTEXT_DEBUG_BIT_ARB
-#endif
-                ,
-                GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
-                0,
-            };
-
+            
             // NOTE: just use the first FBConfig in the list returned
             if(numberOfConfigsReturned > 0)
             {
+                glXCreateContextAttribsARB = context->glXCreateContextAttribsARB;
+                globalDisplay = context->display;
+                globalWindow = context->window;
+                globalFBConfig = FBConfig[0];
+                GLXContext shareContext = 0;
                 GLXContext ModernOpenGLContext = 
-                    context->glXCreateContextAttribsARB(context->display,
-                                           FBConfig[0], 0, true, Attribs);
+                    context->glXCreateContextAttribsARB(context->display, globalFBConfig, shareContext, true, hhxcbOpenGLAttribs);
                 if(ModernOpenGLContext)
                 {
                     if(glXMakeCurrent(context->display, context->window,
@@ -1216,6 +1243,7 @@ hhxcbInitOpenGL(hhxcb_context *context)
                         ModernContext = true;
                         glXDestroyContext(context->display, OpenGLContext);
                         OpenGLContext = ModernOpenGLContext;
+                        globalOpenGLContext = OpenGLContext;
                     }
                 }
             }
@@ -1362,6 +1390,8 @@ struct platform_work_queue
 	sem_t* SemaphoreHandle;
 	
 	platform_work_queue_entry Entries[256];
+
+    bool32 NeedsOpenGL;
 };
 
 internal void
@@ -1429,6 +1459,11 @@ ThreadFunction(void* arg)
 
 	u32 TestThreadID = GetThreadID();
     Assert(TestThreadID == (u32)pthread_self());
+
+    if(Queue->NeedsOpenGL)
+	{
+		hhxcbCreateOpenGLContextForWorkerThread();
+	}
 
 	for(;;)
 	{
@@ -1864,6 +1899,15 @@ main()
 
 	hhxcbInitOpenGL(&context);
 
+	sem_t HighQueueSemaphoreHandle = {};
+	platform_work_queue HighPriorityQueue = {};
+	hhxcbMakeQueue(&HighPriorityQueue, 10, &HighQueueSemaphoreHandle);
+
+	sem_t LowQueueSemaphoreHandle = {};
+	platform_work_queue LowPriorityQueue = {};
+    LowPriorityQueue.NeedsOpenGL = true;
+	hhxcbMakeQueue(&LowPriorityQueue, 4, &LowQueueSemaphoreHandle);
+    
     hhxcb_sound_output sound_output = {};
     sound_output.samples_per_second = 48000;
 	sound_output.channels = 2;
@@ -1884,41 +1928,6 @@ main()
 	// TODO: remove maxpossibleoverrun
 	u32 MaxPossibleOverrun = 2*8*sizeof(u16);
     int16 *sample_buffer = (int16 *)calloc((sound_output.sound_buffer_size + MaxPossibleOverrun), 1);
-
-	sem_t HighQueueSemaphoreHandle = {};
-	platform_work_queue HighPriorityQueue = {};
-	hhxcbMakeQueue(&HighPriorityQueue, 10, &HighQueueSemaphoreHandle);
-
-	sem_t LowQueueSemaphoreHandle = {};
-	platform_work_queue LowPriorityQueue = {};
-	hhxcbMakeQueue(&LowPriorityQueue, 4, &LowQueueSemaphoreHandle);
-	
-#if 0
-	// NOTE: find better way to avoid "const" error
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A0");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A1");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A2");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A3");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A4");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A5");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A6");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A7");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A8");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String A9");
-	
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B0");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B1");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B2");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B3");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B4");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B5");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B6");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B7");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B8");
-	hhxcbAddEntry(&Queue, DoWorkerWork, (void*)"String B9");
-
-	hhxcbCompleteAllWork(&Queue);
-#endif
 
     game_memory m = {};
     m.PermanentStorageSize = Megabytes(256);

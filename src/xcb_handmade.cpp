@@ -1164,11 +1164,15 @@ hhxcbCreateOpenGLContextForWorkerThread(void)
             {
                 // TODO(casey): Fatal error?
             }
+            else
+			{
+				Assert(!"Unable to create texture download context");
+			}
         }
     }
 }
 
-internal void
+internal GLXContext
 hhxcbInitOpenGL(hhxcb_context *context)
 {
 	s32 desiredVisualPixelFormat[] =
@@ -1243,7 +1247,6 @@ hhxcbInitOpenGL(hhxcb_context *context)
                         ModernContext = true;
                         glXDestroyContext(context->display, OpenGLContext);
                         OpenGLContext = ModernOpenGLContext;
-                        globalOpenGLContext = OpenGLContext;
                     }
                 }
             }
@@ -1253,8 +1256,9 @@ hhxcbInitOpenGL(hhxcb_context *context)
             // NOTE(casey): This is an antiquated version of OpenGL
         }
 
+        // NOTE: this function also turns srgb on if it is supported
         OpenGLInit(ModernContext);
-        
+
 		context->glXSwapInterval =
             (glx_swap_interval_mesa *)glXGetProcAddressARB(
                 (GLubyte *)"glXSwapIntervalMESA");
@@ -1268,6 +1272,8 @@ hhxcbInitOpenGL(hhxcb_context *context)
 		InvalidCodePath;
 		// TODO(casey): Diagnostic
 	}
+
+    return OpenGLContext;
 }
 
 internal hhxcb_window_dimension
@@ -1341,7 +1347,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 
             // NOTE: in this path, the bitmap to render is not sRGB format
             glDisable(GL_FRAMEBUFFER_SRGB);
-			OpenGLDisplayBitmap(OutputTarget.Width,
+            OpenGLDisplayBitmap(OutputTarget.Width,
                                 OutputTarget.Height,
                                 OutputTarget.Memory,
                                 OutputTarget.Pitch,
@@ -1897,7 +1903,7 @@ main()
 
     xcb_flush(context.connection);
 
-	hhxcbInitOpenGL(&context);
+	globalOpenGLContext = hhxcbInitOpenGL(&context);
 
 	sem_t HighQueueSemaphoreHandle = {};
 	platform_work_queue HighPriorityQueue = {};
@@ -1952,6 +1958,9 @@ main()
 	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
 	m.PlatformAPI.FileError = hhxcbFileError;
 
+    m.PlatformAPI.AllocateTexture = Win32AllocateTexture;
+    m.PlatformAPI.DeallocateTexture = Win32DeallocateTexture;
+    
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
 	

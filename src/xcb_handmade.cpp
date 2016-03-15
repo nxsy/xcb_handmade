@@ -1204,6 +1204,7 @@ hhxcbInitOpenGL(hhxcb_context *context)
         // NOTE: I don't think this "context escalation" is necessary on
         // *nix, I think you can use glXCreateContextAttribsARB without
         // first creating a legacy context (tested, and yes you can)
+        // "context escalation" is also not necessary to enable srgb
         context->glXCreateContextAttribsARB =
             (glx_create_context_attribs_arb *)glXGetProcAddressARB(
                 (GLubyte *)"glXCreateContextAttribsARB");

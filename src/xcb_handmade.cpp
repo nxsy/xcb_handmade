@@ -90,13 +90,8 @@
 #include "handmade_shared.h"
 
 global_variable platform_api Platform;
+global_variable b32 OpenGLSupportsSRGBFramebuffer;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
-
-global_variable GLXContext globalOpenGLContext;
-global_variable Display *globalDisplay;
-global_variable xcb_window_t globalWindow;
-global_variable GLXFBConfig globalFBConfig;
-global_variable glx_create_context_attribs_arb *glXCreateContextAttribsARB;
 
 #include "handmade_opengl.cpp"
 #include "handmade_render.cpp"
@@ -1150,26 +1145,19 @@ int hhxcbOpenGLAttribs[] =
     GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
     0,
 };
-internal void
-hhxcbCreateOpenGLContextForWorkerThread(void)
+internal hhxcb_thread_startup
+hhxcbGetThreadStartupForGL(hhxcb_context *context, GLXContext shareContext)
 {
-	if(glXCreateContextAttribsARB)
+    hhxcb_thread_startup Result = {};
+
+    Result.window = context->window;
+    Result.display = context->display;
+	if(context->glXCreateContextAttribsARB)
 	{
-        GLXContext shareContext = globalOpenGLContext;
-        GLXContext ModernOpenGLContext = glXCreateContextAttribsARB(globalDisplay, globalFBConfig, shareContext, true, hhxcbOpenGLAttribs);
-        if(ModernOpenGLContext)
-        {
-            if(glXMakeCurrent(globalDisplay, globalWindow,
-                              ModernOpenGLContext))
-            {
-                // TODO(casey): Fatal error?
-            }
-            else
-			{
-				Assert(!"Unable to create texture download context");
-			}
-        }
+        Result.OpenGLContext = context->glXCreateContextAttribsARB(context->display, context->FBConfig, shareContext, true, hhxcbOpenGLAttribs);
     }
+
+    return Result;
 }
 
 internal GLXContext
@@ -1185,6 +1173,7 @@ hhxcbInitOpenGL(hhxcb_context *context)
 		GLX_DEPTH_SIZE, 24,
 		GLX_STENCIL_SIZE, 8,
 		GLX_DOUBLEBUFFER,
+        GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
 		0
 	};
 
@@ -1221,6 +1210,7 @@ hhxcbInitOpenGL(hhxcb_context *context)
                 GLX_DEPTH_SIZE, 24,
                 GLX_STENCIL_SIZE, 8,
                 GLX_DOUBLEBUFFER, true,
+                GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
                 0
             };
 
@@ -1233,13 +1223,10 @@ hhxcbInitOpenGL(hhxcb_context *context)
             // NOTE: just use the first FBConfig in the list returned
             if(numberOfConfigsReturned > 0)
             {
-                glXCreateContextAttribsARB = context->glXCreateContextAttribsARB;
-                globalDisplay = context->display;
-                globalWindow = context->window;
-                globalFBConfig = FBConfig[0];
+                context->FBConfig = FBConfig[0];
                 GLXContext shareContext = 0;
                 GLXContext ModernOpenGLContext = 
-                    context->glXCreateContextAttribsARB(context->display, globalFBConfig, shareContext, true, hhxcbOpenGLAttribs);
+                    context->glXCreateContextAttribsARB(context->display, context->FBConfig, shareContext, true, hhxcbOpenGLAttribs);
                 if(ModernOpenGLContext)
                 {
                     if(glXMakeCurrent(context->display, context->window,
@@ -1381,26 +1368,6 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
     }
 }
 
-struct platform_work_queue_entry
-{
-	platform_work_queue_callback* Callback;
-	void* Data;
-};
-
-struct platform_work_queue
-{
-	uint32 volatile CompletionGoal;
-	uint32 volatile CompletionCount;
-	uint32 volatile NextEntryToWrite;
-	uint32 volatile NextEntryToRead;
-
-	sem_t* SemaphoreHandle;
-	
-	platform_work_queue_entry Entries[256];
-
-    bool32 NeedsOpenGL;
-};
-
 internal void
 hhxcbAddEntry(platform_work_queue* Queue, platform_work_queue_callback*
 			  Callback, void* Data)
@@ -1462,14 +1429,15 @@ hhxcbCompleteAllWork(platform_work_queue* Queue)
 void*
 ThreadFunction(void* arg)
 {
-	platform_work_queue* Queue = (platform_work_queue*)arg;
+    hhxcb_thread_startup *Thread = (hhxcb_thread_startup*)arg;
+	platform_work_queue* Queue = Thread->Queue;
 
 	u32 TestThreadID = GetThreadID();
     Assert(TestThreadID == (u32)pthread_self());
 
-    if(Queue->NeedsOpenGL)
+    if(Thread->OpenGLContext)
 	{
-		hhxcbCreateOpenGLContextForWorkerThread();
+		glXMakeCurrent(Thread->display, Thread->window, Thread->OpenGLContext);
 	}
 
 	for(;;)
@@ -1488,8 +1456,8 @@ internal PLATFORM_WORK_QUEUE_CALLBACK(DoWorkerWork)
 }
 
 internal void
-hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
-			   sem_t* SemaphoreHandle)
+hhxcbMakeQueue(platform_work_queue* Queue, sem_t* SemaphoreHandle,
+               uint32 ThreadCount, hhxcb_thread_startup *Startups)
 {
 	Queue->CompletionGoal = 0;
 	Queue->CompletionCount = 0;
@@ -1508,10 +1476,13 @@ hhxcbMakeQueue(platform_work_queue* Queue, uint32 ThreadCount,
 		ThreadIndex < ThreadCount;
 		++ThreadIndex)
 	{
+        hhxcb_thread_startup *Startup = Startups + ThreadIndex;
+        Startup->Queue = Queue;
+        
 		pthread_t thread = {};
 		pthread_attr_t attr = {};
 		pthread_attr_init(&attr);
-		pthread_create(&thread, &attr, &ThreadFunction, Queue);
+		pthread_create(&thread, &attr, &ThreadFunction, Startup);
 	}	
 }
 
@@ -1904,16 +1875,21 @@ main()
 
     xcb_flush(context.connection);
 
-	globalOpenGLContext = hhxcbInitOpenGL(&context);
+	GLXContext OpenGLContext = hhxcbInitOpenGL(&context);
 
+    hhxcb_thread_startup HighPriStartups[10] = {};
 	sem_t HighQueueSemaphoreHandle = {};
 	platform_work_queue HighPriorityQueue = {};
-	hhxcbMakeQueue(&HighPriorityQueue, 10, &HighQueueSemaphoreHandle);
+	hhxcbMakeQueue(&HighPriorityQueue, &HighQueueSemaphoreHandle, ArrayCount(HighPriStartups), HighPriStartups);
 
+    hhxcb_thread_startup LowPriStartups[4] = {};
+    LowPriStartups[0] = hhxcbGetThreadStartupForGL(&context, OpenGLContext);
+    LowPriStartups[1] = hhxcbGetThreadStartupForGL(&context, OpenGLContext);
+    LowPriStartups[2] = hhxcbGetThreadStartupForGL(&context, OpenGLContext);
+    LowPriStartups[3] = hhxcbGetThreadStartupForGL(&context, OpenGLContext);
 	sem_t LowQueueSemaphoreHandle = {};
 	platform_work_queue LowPriorityQueue = {};
-    LowPriorityQueue.NeedsOpenGL = true;
-	hhxcbMakeQueue(&LowPriorityQueue, 4, &LowQueueSemaphoreHandle);
+	hhxcbMakeQueue(&LowPriorityQueue, &LowQueueSemaphoreHandle, ArrayCount(LowPriStartups), LowPriStartups);
     
     hhxcb_sound_output sound_output = {};
     sound_output.samples_per_second = 48000;

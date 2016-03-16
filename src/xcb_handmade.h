@@ -53,6 +53,32 @@ struct hhxcb_state {
     char *one_past_binary_filename_slash;
 };
 
+struct platform_work_queue_entry
+{
+	platform_work_queue_callback* Callback;
+	void* Data;
+};
+
+struct platform_work_queue
+{
+	uint32 volatile CompletionGoal;
+	uint32 volatile CompletionCount;
+	uint32 volatile NextEntryToWrite;
+	uint32 volatile NextEntryToRead;
+
+	sem_t* SemaphoreHandle;
+	
+	platform_work_queue_entry Entries[256];
+};
+
+struct hhxcb_thread_startup
+{
+    xcb_window_t window;
+	Display *display;
+    GLXContext OpenGLContext;
+    platform_work_queue *Queue;
+};
+
 struct hhxcb_game_code
 {
     void *library_handle;
@@ -132,6 +158,7 @@ struct hhxcb_context
     xcb_key_symbols_t *key_symbols;
     xcb_window_t window;
 	Display *display;
+    GLXFBConfig FBConfig;
 
     b32 useSoftwareRendering;
     

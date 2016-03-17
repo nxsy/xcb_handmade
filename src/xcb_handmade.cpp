@@ -93,6 +93,15 @@ global_variable platform_api Platform;
 global_variable b32 OpenGLSupportsSRGBFramebuffer;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
 
+enum hhxcb_rendering_type
+{
+    hhxcbRenderType_RenderOpenGL_DisplayOpenGL,
+    hhxcbRenderType_RenderSoftware_DisplayOpenGL,
+    hhxcbRenderType_RenderSoftware_DisplayGDI,
+};
+global_variable hhxcb_rendering_type GlobalRenderingType;
+global_variable b32 GlobalPause;
+
 #include "handmade_opengl.cpp"
 #include "handmade_render.cpp"
 
@@ -661,12 +670,13 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
 {
     game_controller_input *old_keyboard_controller = GetController(old_input, 0);
     game_controller_input *new_keyboard_controller = GetController(new_input, 0);
+
     *new_keyboard_controller = {};
     new_keyboard_controller->IsConnected = true;
     for (
-            uint button_index = 0;
-            button_index < ArrayCount(new_keyboard_controller->Buttons);
-            ++button_index)
+        uint button_index = 0;
+        button_index < ArrayCount(new_keyboard_controller->Buttons);
+        ++button_index)
     {
         new_keyboard_controller->Buttons[button_index].EndedDown =
             old_keyboard_controller->Buttons[button_index].EndedDown;
@@ -676,17 +686,17 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
     new_input->MouseY = old_input->MouseY;
     new_input->MouseZ = old_input->MouseZ;
 
-	new_input->ShiftDown = context->modifier_keys[MOD_SHIFT].EndedDown;
-	new_input->AltDown = context->modifier_keys[MOD_ALT].EndedDown;
-	new_input->ControlDown = context->modifier_keys[MOD_CONTROL].EndedDown;
+    new_input->ShiftDown = context->modifier_keys[MOD_SHIFT].EndedDown;
+    new_input->AltDown = context->modifier_keys[MOD_ALT].EndedDown;
+    new_input->ControlDown = context->modifier_keys[MOD_CONTROL].EndedDown;
 	
-	for(u32 ButtonIndex = 0;
-		ButtonIndex < PlatformMouseButton_Count;
-		++ButtonIndex)
-	{
-		new_input->MouseButtons[ButtonIndex] = old_input->MouseButtons[ButtonIndex];
-		new_input->MouseButtons[ButtonIndex].HalfTransitionCount = 0;
-	}
+    for(u32 ButtonIndex = 0;
+        ButtonIndex < PlatformMouseButton_Count;
+        ++ButtonIndex)
+    {
+        new_input->MouseButtons[ButtonIndex] = old_input->MouseButtons[ButtonIndex];
+        new_input->MouseButtons[ButtonIndex].HalfTransitionCount = 0;
+    }
 
     for (int i = 0; i < HHXCB_MAX_CONTROLLERS; ++i)
     {
@@ -712,55 +722,55 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 if (j.number == pad->a_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->ActionDown,
-                            &new_controller->ActionDown);
+                                         &old_controller->ActionDown,
+                                         &new_controller->ActionDown);
                 }
                 else if (j.number == pad->b_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->ActionRight,
-                            &new_controller->ActionRight);
+                                         &old_controller->ActionRight,
+                                         &new_controller->ActionRight);
                 }
                 else if (j.number == pad->x_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->ActionLeft,
-                            &new_controller->ActionLeft);
+                                         &old_controller->ActionLeft,
+                                         &new_controller->ActionLeft);
                 }
                 else if (j.number == pad->y_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->ActionUp,
-                            &new_controller->ActionUp);
+                                         &old_controller->ActionUp,
+                                         &new_controller->ActionUp);
                 }
                 else if (j.number == pad->l1_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->LeftShoulder,
-                            &new_controller->LeftShoulder);
+                                         &old_controller->LeftShoulder,
+                                         &new_controller->LeftShoulder);
                 }
                 else if (j.number == pad->r1_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->RightShoulder,
-                            &new_controller->RightShoulder);
+                                         &old_controller->RightShoulder,
+                                         &new_controller->RightShoulder);
                 }
                 else if (j.number == pad->back_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->Back,
-                            &new_controller->Back);
+                                         &old_controller->Back,
+                                         &new_controller->Back);
                 }
                 else if (j.number == pad->start_button)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->Start,
-                            &new_controller->Start);
+                                         &old_controller->Start,
+                                         &new_controller->Start);
                 }
                 else
                 {
                     printf("Unhandled button: number %d, value %d\n",
-                            j.number, j.value);
+                           j.number, j.value);
                 }
             }
             if (j.type == JS_EVENT_AXIS)
@@ -771,7 +781,7 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 {
                     new_controller->StickAverageX =
                         hhxcb_process_controller_axis(j.value, dead_zone,
-                                axis_inverted);
+                                                      axis_inverted);
                     if (new_controller->StickAverageX != 0.0f)
                     {
                         new_controller->IsAnalog = true;
@@ -781,7 +791,7 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 {
                     new_controller->StickAverageY =
                         hhxcb_process_controller_axis(j.value, dead_zone,
-                                axis_inverted);
+                                                      axis_inverted);
                     if (new_controller->StickAverageY != 0.0f)
                     {
                         new_controller->IsAnalog = true;
@@ -798,27 +808,27 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 else if (j.number == pad->dpad_x_axis)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->MoveRight,
-                            &new_controller->MoveRight);
+                                         &old_controller->MoveRight,
+                                         &new_controller->MoveRight);
                     hhxcb_process_button((j.value < 0),
-                            &old_controller->MoveLeft,
-                            &new_controller->MoveLeft);
+                                         &old_controller->MoveLeft,
+                                         &new_controller->MoveLeft);
                     new_controller->IsAnalog = false;
                 }
                 else if (j.number == pad->dpad_y_axis)
                 {
                     hhxcb_process_button((j.value > 0),
-                            &old_controller->MoveDown,
-                            &new_controller->MoveDown);
+                                         &old_controller->MoveDown,
+                                         &new_controller->MoveDown);
                     hhxcb_process_button((j.value < 0),
-                            &old_controller->MoveUp,
-                            &new_controller->MoveUp);
+                                         &old_controller->MoveUp,
+                                         &new_controller->MoveUp);
                     new_controller->IsAnalog = false;
                 }
                 else
                 {
                     printf("Unhandled Axis: number %d, value %d\n",
-                        j.number, j.value);
+                           j.number, j.value);
                 }
 
             }
@@ -827,7 +837,7 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
             context->need_controller_refresh = true;
         }
     }
-    
+
     XEvent event;
     while (XPending(context->display))
     {
@@ -899,6 +909,13 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 else if ((keysym == XK_Control_L) || (keysym == XK_Control_R))
                 {
                     hhxcb_process_keyboard_message(&context->modifier_keys[MOD_CONTROL], is_down);
+                }
+                else if(keysym == XK_p)
+                {
+                    if(is_down)
+                    {
+                        GlobalPause = !GlobalPause;
+                    }
                 }
                 else if (keysym == XK_l)
                 {
@@ -975,7 +992,7 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 break;
             }
         }
-    };
+    }
 }
 
 internal void
@@ -1296,7 +1313,12 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 */
 
 	// NOTE: switch between xwindows display and opengl display
-    DEBUG_IF(Renderer_UseSoftware)
+    if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
+	{
+		OpenGLRenderCommands(Commands, windowWidth, windowHeight);
+		glXSwapBuffers(context->display, context->window);
+	}
+	else
     {
         loaded_bitmap OutputTarget;
 		// NOTE: setup OutputTarget.Memory upside down and set
@@ -1309,8 +1331,9 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 		OutputTarget.Height = buffer->height;
 		OutputTarget.Pitch = -buffer->pitch;
 
-        b32 DisplayViaHardware = true;        
-        if(DisplayViaHardware)
+        SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+		
+		if(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayOpenGL)
 		{
             OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
             OutputTarget.Pitch = buffer->pitch;
@@ -1331,8 +1354,6 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
             }
 #endif
             
-            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
-
             // NOTE: in this path, the bitmap to render is not sRGB format
             glDisable(GL_FRAMEBUFFER_SRGB);
             OpenGLDisplayBitmap(OutputTarget.Width,
@@ -1345,8 +1366,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 		}
 		else
 		{
-            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
-            
+            Assert(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayGDI);
             // NOTE: copy xcb_image to pixmap
             xcb_image_put(context->connection, buffer->xcb_pixmap_id,
                           buffer->xcb_gcontext_id, buffer->xcb_image,
@@ -1360,11 +1380,6 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                           buffer->xcb_image->height);
             //xcb_flush(context->connection);
         }
-    }
-    else
-    {
-        OpenGLRenderCommands(Commands, windowWidth, windowHeight);
-        glXSwapBuffers(context->display, context->window);
     }
 }
 
@@ -1963,6 +1978,14 @@ main()
 	
     while(!context.ending_flag)
     {
+        // NOTE: alsa doesn't give access to the write/play cursor to do
+        // proper audio debugging
+        // NOTE: just using the last_counter pointer for the id
+        DEBUG_BEGIN_DATA_BLOCK(Platform_Controls, DEBUG_POINTER_ID(&last_counter));
+        DEBUG_VALUE(GlobalPause);
+        DEBUG_VALUE(GlobalRenderingType);
+        DEBUG_END_DATA_BLOCK();
+        
 		//
 		//
 		//
@@ -2016,33 +2039,36 @@ main()
             PushBufferSize, PushBuffer,
             buffer.width,
             buffer.height);
-        
-        if (state.recording_index)
+
+        if(!GlobalPause)
         {
-            hhxcb_record_input(&state, new_input);
-        }
-        if (state.playback_index)
-        {
-			game_input temp = *new_input;
-            hhxcb_playback_input(&state, new_input);
-			for(u32 MouseButtonIndex = 0;
-				MouseButtonIndex < PlatformMouseButton_Count;
-				++MouseButtonIndex)
-			{
-				new_input->MouseButtons[MouseButtonIndex] = temp.MouseButtons[MouseButtonIndex];
-			}
-			new_input->MouseX = temp.MouseX;
-			new_input->MouseY = temp.MouseY;
-			new_input->MouseZ = temp.MouseZ;
-        }
-        if (game_code.UpdateAndRender)
-        {
-            game_code.UpdateAndRender(&m, new_input, &RenderCommands);
-			if(new_input->QuitRequested)
-			{
-				context.ending_flag = true;
-			}
-            //HandleDebugCycleCounter(&m);
+            if (state.recording_index)
+            {
+                hhxcb_record_input(&state, new_input);
+            }
+            if (state.playback_index)
+            {
+                game_input temp = *new_input;
+                hhxcb_playback_input(&state, new_input);
+                for(u32 MouseButtonIndex = 0;
+                    MouseButtonIndex < PlatformMouseButton_Count;
+                    ++MouseButtonIndex)
+                {
+                    new_input->MouseButtons[MouseButtonIndex] = temp.MouseButtons[MouseButtonIndex];
+                }
+                new_input->MouseX = temp.MouseX;
+                new_input->MouseY = temp.MouseY;
+                new_input->MouseZ = temp.MouseZ;
+            }
+            if (game_code.UpdateAndRender)
+            {
+                game_code.UpdateAndRender(&m, new_input, &RenderCommands);
+                if(new_input->QuitRequested)
+                {
+                    context.ending_flag = true;
+                }
+                //HandleDebugCycleCounter(&m);
+            }
         }
 
 		END_BLOCK(GameUpdate);
@@ -2052,57 +2078,60 @@ main()
 		//
 
 		BEGIN_BLOCK(AudioUpdate);
+
+        if(!GlobalPause)
+        {
+            snd_pcm_sframes_t delay, avail;
+            snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
+            u32 samplesToFill = 0;
+            u32 expectedSamplesPerFrame = (sound_output.samples_per_second / game_update_hz);
+            u32 samplesInBuffer = sound_output.sample_count - avail;
+            Assert(samplesInBuffer >= 0);
+            // NOTE: asymptote "samplesInBuffer" to "period_size*4", since the
+            // soundcard will interrupt to get samples every "period_size"
+            // samples. On this machine it is ~1000 samples
+            s32 sampleAdjustment = (samplesInBuffer - (sound_output.period_size*4)) / 2;
+            if(sound_output.sample_count == avail)
+            {
+                // NOTE: initial fill on startup and after an underrun
+                samplesToFill = (expectedSamplesPerFrame*2) + sound_output.safety_samples;
+            }
+            else
+            {
+                samplesToFill = expectedSamplesPerFrame - sampleAdjustment;
+            }
+            Assert(samplesToFill >= 0);
 		
-		snd_pcm_sframes_t delay, avail;
-        snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
-		u32 samplesToFill = 0;
-		u32 expectedSamplesPerFrame = (sound_output.samples_per_second / game_update_hz);
-		u32 samplesInBuffer = sound_output.sample_count - avail;
-		Assert(samplesInBuffer >= 0);
-		// NOTE: asymptote "samplesInBuffer" to "period_size*4", since the
-		// soundcard will interrupt to get samples every "period_size"
-		// samples. On this machine it is ~1000 samples
-		s32 sampleAdjustment = (samplesInBuffer - (sound_output.period_size*4)) / 2;
-		if(sound_output.sample_count == avail)
-		{
-			// NOTE: initial fill on startup and after an underrun
-			samplesToFill = (expectedSamplesPerFrame*2) + sound_output.safety_samples;
-		}
-		else
-		{
-			samplesToFill = expectedSamplesPerFrame - sampleAdjustment;
-		}
-		Assert(samplesToFill >= 0);
+            game_sound_output_buffer sound_buffer = {};
+            sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
+            sound_buffer.SampleCount = Align8((samplesToFill));
+            sound_buffer.Samples = sample_buffer;
 		
-		game_sound_output_buffer sound_buffer = {};
-		sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
-		sound_buffer.SampleCount = Align8((samplesToFill));
-		sound_buffer.Samples = sample_buffer;
-		
-		if(game_code.GetSoundSamples)
-		{
-			game_code.GetSoundSamples(&m, &sound_buffer);
-		}
+            if(game_code.GetSoundSamples)
+            {
+                game_code.GetSoundSamples(&m, &sound_buffer);
+            }
 #define SOUND_DEBUG 0
 #if SOUND_DEBUG
-		// NOTE: "delay" is the delay of the soundcard hardware
-		printf("samples in buffer before write: %ld delay in samples: %ld\n", (sound_output.sample_count - avail), delay);
+            // NOTE: "delay" is the delay of the soundcard hardware
+            printf("samples in buffer before write: %ld delay in samples: %ld\n", (sound_output.sample_count - avail), delay);
 #endif
-		s32 writtenSamples = snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
-		if(writtenSamples < 0)
-		{
-			writtenSamples = snd_pcm_recover(context.alsa_handle, writtenSamples, 0);
-		}
-		else if(writtenSamples != sound_buffer.SampleCount)
-		{
-			printf("only wrote %d of %d samples\n", writtenSamples, sound_buffer.SampleCount);
-		}
+            s32 writtenSamples = snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
+            if(writtenSamples < 0)
+            {
+                writtenSamples = snd_pcm_recover(context.alsa_handle, writtenSamples, 0);
+            }
+            else if(writtenSamples != sound_buffer.SampleCount)
+            {
+                printf("only wrote %d of %d samples\n", writtenSamples, sound_buffer.SampleCount);
+            }
 
 #if SOUND_DEBUG
-		snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
-		printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
+            snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
+            printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
 #endif
-
+        }
+        
 		END_BLOCK(AudioUpdate);
 
 		//
@@ -2128,48 +2157,51 @@ main()
 // TODO: Leave this off until we have actual vblank support?
 #if 0
 		BEGIN_BLOCK(FramerateWait);
-		
-        timespec target_counter = {};
-        target_counter.tv_sec = last_counter.tv_sec;
-        target_counter.tv_nsec = last_counter.tv_nsec + target_nanoseconds_per_frame;
-        if (target_counter.tv_nsec > (1000 * 1000 * 1000))
-        {
-            target_counter.tv_sec++;
-            target_counter.tv_nsec %= (1000 * 1000 * 1000);
-        }
 
-        timespec work_counter = hhxcbGetWallClock();
-
-        bool32 might_need_sleep = 0;
-        if (work_counter.tv_sec < target_counter.tv_sec)
+        if(!GlobalPause)
         {
-            might_need_sleep = 1;
-        }
-        else if ((work_counter.tv_sec == target_counter.tv_sec) && (work_counter.tv_nsec < target_counter.tv_nsec))
-        {
-            might_need_sleep = 1;
-        }
-        if (might_need_sleep) {
-            timespec sleep_counter = {};
-            sleep_counter.tv_nsec = target_counter.tv_nsec - work_counter.tv_nsec;
-            if (sleep_counter.tv_nsec < 0) {
-                sleep_counter.tv_nsec += (1000 * 1000 * 1000);
-            }
-            // To closest ms
-            sleep_counter.tv_nsec -= sleep_counter.tv_nsec % (1000 * 1000);
-            if (sleep_counter.tv_nsec > 0) {
-                timespec remaining_sleep_counter = {};
-                nanosleep(&sleep_counter, &remaining_sleep_counter);
-            }
-            else
+            timespec target_counter = {};
+            target_counter.tv_sec = last_counter.tv_sec;
+            target_counter.tv_nsec = last_counter.tv_nsec + target_nanoseconds_per_frame;
+            if (target_counter.tv_nsec > (1000 * 1000 * 1000))
             {
-                // TODO(nbm): Log missed sleep
+                target_counter.tv_sec++;
+                target_counter.tv_nsec %= (1000 * 1000 * 1000);
             }
-        }
 
-        timespec spin_counter = hhxcbGetWallClock();
-        while (spin_counter.tv_sec <= target_counter.tv_sec && spin_counter.tv_nsec < target_counter.tv_nsec) {
-            clock_gettime(HHXCB_CLOCK, &spin_counter);
+            timespec work_counter = hhxcbGetWallClock();
+
+            bool32 might_need_sleep = 0;
+            if (work_counter.tv_sec < target_counter.tv_sec)
+            {
+                might_need_sleep = 1;
+            }
+            else if ((work_counter.tv_sec == target_counter.tv_sec) && (work_counter.tv_nsec < target_counter.tv_nsec))
+            {
+                might_need_sleep = 1;
+            }
+            if (might_need_sleep) {
+                timespec sleep_counter = {};
+                sleep_counter.tv_nsec = target_counter.tv_nsec - work_counter.tv_nsec;
+                if (sleep_counter.tv_nsec < 0) {
+                    sleep_counter.tv_nsec += (1000 * 1000 * 1000);
+                }
+                // To closest ms
+                sleep_counter.tv_nsec -= sleep_counter.tv_nsec % (1000 * 1000);
+                if (sleep_counter.tv_nsec > 0) {
+                    timespec remaining_sleep_counter = {};
+                    nanosleep(&sleep_counter, &remaining_sleep_counter);
+                }
+                else
+                {
+                    // TODO(nbm): Log missed sleep
+                }
+            }
+
+            timespec spin_counter = hhxcbGetWallClock();
+            while (spin_counter.tv_sec <= target_counter.tv_sec && spin_counter.tv_nsec < target_counter.tv_nsec) {
+                clock_gettime(HHXCB_CLOCK, &spin_counter);
+            }
         }
 
 		END_BLOCK(FramerateWait);

@@ -1981,10 +1981,10 @@ main()
         // NOTE: alsa doesn't give access to the write/play cursor to do
         // proper audio debugging
         // NOTE: just using the last_counter pointer for the id
-        DEBUG_BEGIN_DATA_BLOCK(Platform_Controls, DEBUG_POINTER_ID(&last_counter));
+        {DEBUG_DATA_BLOCK(Platform_Controls, DEBUG_POINTER_ID(&last_counter));
         DEBUG_VALUE(GlobalPause);
         DEBUG_VALUE(GlobalRenderingType);
-        DEBUG_END_DATA_BLOCK();
+        }
         
 		//
 		//

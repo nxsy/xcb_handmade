@@ -1980,8 +1980,7 @@ main()
     {
         // NOTE: alsa doesn't give access to the write/play cursor to do
         // proper audio debugging
-        // NOTE: just using the last_counter pointer for the id
-        {DEBUG_DATA_BLOCK(Platform_Controls, DEBUG_POINTER_ID(&last_counter));
+        {DEBUG_DATA_BLOCK("Platform/Controls");
         DEBUG_VALUE(GlobalPause);
         DEBUG_VALUE(GlobalRenderingType);
         }
@@ -1990,7 +1989,7 @@ main()
 		//
 		//
 
-		BEGIN_BLOCK(ExecutableRefresh);
+		BEGIN_BLOCK("ExecutableRefresh");
 		
         if (last_counter.tv_sec >= next_controller_refresh)
         {
@@ -2015,25 +2014,25 @@ main()
 			m.ExecutableReloaded = true;
         }
 
-		END_BLOCK(ExecutableRefresh);
+		END_BLOCK();
 
 		//
 		//
 		//
 
-		BEGIN_BLOCK(InputProcessing);
+		BEGIN_BLOCK("InputProcessing");
 		
         new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, &buffer, new_input, old_input);
 
-		END_BLOCK(InputProcessing);
+		END_BLOCK();
 
 		//
 		//
 		//
 
-		BEGIN_BLOCK(GameUpdate);
+		BEGIN_BLOCK("GameUpdate");
 
         game_render_commands RenderCommands = RenderCommandStruct(
             PushBufferSize, PushBuffer,
@@ -2071,13 +2070,13 @@ main()
             }
         }
 
-		END_BLOCK(GameUpdate);
+		END_BLOCK();
 
 		//
 		//
 		//
 
-		BEGIN_BLOCK(AudioUpdate);
+		BEGIN_BLOCK("AudioUpdate");
 
         if(!GlobalPause)
         {
@@ -2132,14 +2131,14 @@ main()
 #endif
         }
         
-		END_BLOCK(AudioUpdate);
+		END_BLOCK();
 
 		//
 		//
 		//
 		
 #if HANDMADE_INTERNAL
-		BEGIN_BLOCK(DebugCollation);
+		BEGIN_BLOCK("DebugCollation");
 		
 		if(game_code.DEBUGFrameEnd)
 		{
@@ -2147,7 +2146,7 @@ main()
 		}
 		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 
-		END_BLOCK(DebugCollation);
+		END_BLOCK();
 #endif
 		
 		//
@@ -2156,7 +2155,7 @@ main()
 		
 // TODO: Leave this off until we have actual vblank support?
 #if 0
-		BEGIN_BLOCK(FramerateWait);
+		BEGIN_BLOCK("FramerateWait");
 
         if(!GlobalPause)
         {
@@ -2204,14 +2203,14 @@ main()
             }
         }
 
-		END_BLOCK(FramerateWait);
+		END_BLOCK();
 #endif
 		
 		//
 		//
 		//
 
-		BEGIN_BLOCK(FrameDisplay);
+		BEGIN_BLOCK("FrameDisplay");
 
         umm NeededSortMemorySize = RenderCommands.PushBufferElementCount *
             sizeof(tile_sort_entry);
@@ -2232,7 +2231,7 @@ main()
         new_input = old_input;
         old_input = temp_input;
 
-		END_BLOCK(FrameDisplay);
+		END_BLOCK();
 		
         timespec end_counter = hhxcbGetWallClock();
 		FRAME_MARKER(hhxcbGetSecondsElapsed(last_counter, end_counter));

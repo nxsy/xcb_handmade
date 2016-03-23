@@ -1321,23 +1321,16 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	else
     {
         loaded_bitmap OutputTarget;
-		// NOTE: setup OutputTarget.Memory upside down and set
-		// game_buffer.pitch negative, so the game would fill the
-		// backbuffer upside down. XCB doesn't seem to have an
-		// option to flip the image.
-		OutputTarget.Memory = ((uint8*)buffer->xcb_image->data)+
-            (buffer->pitch*(buffer->height-1));
+		
 		OutputTarget.Width = buffer->width;
 		OutputTarget.Height = buffer->height;
-		OutputTarget.Pitch = -buffer->pitch;
-
-        SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
 		
 		if(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayOpenGL)
 		{
             OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
             OutputTarget.Pitch = buffer->pitch;
 
+            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
 #if 0
             // NOTE: buffer clear
             u32 *pixel = (u32 *)OutputTarget.Memory;
@@ -1367,6 +1360,17 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 		else
 		{
             Assert(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayGDI);
+
+            // NOTE: setup OutputTarget.Memory upside down and set
+            // game_buffer.pitch negative, so the game would fill the
+            // backbuffer upside down. XCB doesn't seem to have an
+            // option to flip the image.
+            OutputTarget.Memory = ((uint8*)buffer->xcb_image->data)+
+                (buffer->pitch*(buffer->height-1));
+            OutputTarget.Pitch = -buffer->pitch;
+
+            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+            
             // NOTE: copy xcb_image to pixmap
             xcb_image_put(context->connection, buffer->xcb_pixmap_id,
                           buffer->xcb_gcontext_id, buffer->xcb_image,
@@ -1981,8 +1985,8 @@ main()
         // NOTE: alsa doesn't give access to the write/play cursor to do
         // proper audio debugging
         {DEBUG_DATA_BLOCK("Platform/Controls");
-        DEBUG_VALUE(GlobalPause);
-        DEBUG_VALUE(GlobalRenderingType);
+        DEBUG_B32(GlobalPause);
+        DEBUG_B32(GlobalRenderingType);
         }
         
 		//

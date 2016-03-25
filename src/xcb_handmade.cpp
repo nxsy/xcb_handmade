@@ -1936,7 +1936,7 @@ main()
     game_memory m = {};
     m.PermanentStorageSize = Megabytes(256);
     m.TransientStorageSize = Gigabytes(1);
-    m.DebugStorageSize = Megabytes(64);
+    m.DebugStorageSize = Megabytes(256);
     state.total_size = m.PermanentStorageSize + m.TransientStorageSize +
 		m.DebugStorageSize;
     state.game_memory_block = calloc(state.total_size, sizeof(uint8));

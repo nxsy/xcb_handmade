@@ -1315,6 +1315,8 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	// NOTE: switch between xwindows display and opengl display
     if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
 	{
+        // NOTE: in this path, the bitmap to render is sRGB format
+        glEnable(GL_FRAMEBUFFER_SRGB);
 		OpenGLRenderCommands(Commands, windowWidth, windowHeight);
 		glXSwapBuffers(context->display, context->window);
 	}
@@ -1985,8 +1987,8 @@ main()
         // NOTE: alsa doesn't give access to the write/play cursor to do
         // proper audio debugging
         {DEBUG_DATA_BLOCK("Platform/Controls");
-        DEBUG_B32(GlobalPause);
-        DEBUG_B32(GlobalRenderingType);
+            DEBUG_B32(GlobalPause);
+            DEBUG_B32(GlobalRenderingType);
         }
         
 		//

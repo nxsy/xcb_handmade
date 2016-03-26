@@ -1896,7 +1896,13 @@ main()
 
     xcb_flush(context.connection);
 
-	GLXContext OpenGLContext = hhxcbInitOpenGL(&context);
+	GLXContext OpenGLContext = 0;
+#if 1
+			OpenGLContext = hhxcbInitOpenGL(&context);
+#else
+			GlobalRenderingType = hhxcbRenderType_RenderSoftware_DisplayGDI;
+#endif
+
 
     hhxcb_thread_startup HighPriStartups[10] = {};
 	sem_t HighQueueSemaphoreHandle = {};

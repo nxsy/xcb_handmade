@@ -92,6 +92,7 @@
 global_variable platform_api Platform;
 global_variable b32 OpenGLSupportsSRGBFramebuffer;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
+global_variable GLuint OpenGLReservedBlitTexture;
 
 enum hhxcb_rendering_type
 {
@@ -698,298 +699,306 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
         new_input->MouseButtons[ButtonIndex].HalfTransitionCount = 0;
     }
 
-    for (int i = 0; i < HHXCB_MAX_CONTROLLERS; ++i)
     {
-        hhxcb_controller_info *pad = &context->controller_info[i];
-        if (!pad->is_active)
-        {
-            continue;
-        }
-        game_controller_input *old_controller = GetController(old_input, i+1);
-        game_controller_input *new_controller = GetController(new_input, i+1);
+        TIMED_BLOCK("XBox Controllers");
 
-        *new_controller = *old_controller;
-        new_controller->IsConnected = true;
-        new_controller->IsAnalog = old_controller->IsAnalog;
-
-        js_event j;
-        while (read(pad->fd, &j, sizeof(js_event)) == sizeof(js_event))
+        for (int i = 0; i < HHXCB_MAX_CONTROLLERS; ++i)
         {
-            // Don't care if init or afterwards
-            j.type &= ~JS_EVENT_INIT;
-            if (j.type == JS_EVENT_BUTTON)
+            hhxcb_controller_info *pad = &context->controller_info[i];
+            if (!pad->is_active)
             {
-                if (j.number == pad->a_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->ActionDown,
-                                         &new_controller->ActionDown);
-                }
-                else if (j.number == pad->b_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->ActionRight,
-                                         &new_controller->ActionRight);
-                }
-                else if (j.number == pad->x_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->ActionLeft,
-                                         &new_controller->ActionLeft);
-                }
-                else if (j.number == pad->y_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->ActionUp,
-                                         &new_controller->ActionUp);
-                }
-                else if (j.number == pad->l1_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->LeftShoulder,
-                                         &new_controller->LeftShoulder);
-                }
-                else if (j.number == pad->r1_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->RightShoulder,
-                                         &new_controller->RightShoulder);
-                }
-                else if (j.number == pad->back_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->Back,
-                                         &new_controller->Back);
-                }
-                else if (j.number == pad->start_button)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->Start,
-                                         &new_controller->Start);
-                }
-                else
-                {
-                    printf("Unhandled button: number %d, value %d\n",
-                           j.number, j.value);
-                }
+                continue;
             }
-            if (j.type == JS_EVENT_AXIS)
+            game_controller_input *old_controller = GetController(old_input, i+1);
+            game_controller_input *new_controller = GetController(new_input, i+1);
+
+            *new_controller = *old_controller;
+            new_controller->IsConnected = true;
+            new_controller->IsAnalog = old_controller->IsAnalog;
+
+            js_event j;
+            while (read(pad->fd, &j, sizeof(js_event)) == sizeof(js_event))
             {
-                uint16 dead_zone = pad->axis_dead_zones[j.number];
-                bool axis_inverted = pad->axis_inverted[j.number];
-                if (j.number == pad->left_thumb_x_axis)
+                // Don't care if init or afterwards
+                j.type &= ~JS_EVENT_INIT;
+                if (j.type == JS_EVENT_BUTTON)
                 {
-                    new_controller->StickAverageX =
-                        hhxcb_process_controller_axis(j.value, dead_zone,
-                                                      axis_inverted);
-                    if (new_controller->StickAverageX != 0.0f)
+                    if (j.number == pad->a_button)
                     {
-                        new_controller->IsAnalog = true;
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->ActionDown,
+                                             &new_controller->ActionDown);
+                    }
+                    else if (j.number == pad->b_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->ActionRight,
+                                             &new_controller->ActionRight);
+                    }
+                    else if (j.number == pad->x_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->ActionLeft,
+                                             &new_controller->ActionLeft);
+                    }
+                    else if (j.number == pad->y_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->ActionUp,
+                                             &new_controller->ActionUp);
+                    }
+                    else if (j.number == pad->l1_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->LeftShoulder,
+                                             &new_controller->LeftShoulder);
+                    }
+                    else if (j.number == pad->r1_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->RightShoulder,
+                                             &new_controller->RightShoulder);
+                    }
+                    else if (j.number == pad->back_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->Back,
+                                             &new_controller->Back);
+                    }
+                    else if (j.number == pad->start_button)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->Start,
+                                             &new_controller->Start);
+                    }
+                    else
+                    {
+                        printf("Unhandled button: number %d, value %d\n",
+                               j.number, j.value);
                     }
                 }
-                else if (j.number == pad->left_thumb_y_axis)
+                if (j.type == JS_EVENT_AXIS)
                 {
-                    new_controller->StickAverageY =
-                        hhxcb_process_controller_axis(j.value, dead_zone,
-                                                      axis_inverted);
-                    if (new_controller->StickAverageY != 0.0f)
+                    uint16 dead_zone = pad->axis_dead_zones[j.number];
+                    bool axis_inverted = pad->axis_inverted[j.number];
+                    if (j.number == pad->left_thumb_x_axis)
                     {
-                        new_controller->IsAnalog = true;
+                        new_controller->StickAverageX =
+                            hhxcb_process_controller_axis(j.value, dead_zone,
+                                                          axis_inverted);
+                        if (new_controller->StickAverageX != 0.0f)
+                        {
+                            new_controller->IsAnalog = true;
+                        }
                     }
-                }
-                else if (j.number == pad->right_thumb_x_axis)
-                {
-                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
-                }
-                else if (j.number == pad->right_thumb_y_axis)
-                {
-                    // TODO(nbm): Do something with this.  Here otherwise we get spammed.
-                }
-                else if (j.number == pad->dpad_x_axis)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->MoveRight,
-                                         &new_controller->MoveRight);
-                    hhxcb_process_button((j.value < 0),
-                                         &old_controller->MoveLeft,
-                                         &new_controller->MoveLeft);
-                    new_controller->IsAnalog = false;
-                }
-                else if (j.number == pad->dpad_y_axis)
-                {
-                    hhxcb_process_button((j.value > 0),
-                                         &old_controller->MoveDown,
-                                         &new_controller->MoveDown);
-                    hhxcb_process_button((j.value < 0),
-                                         &old_controller->MoveUp,
-                                         &new_controller->MoveUp);
-                    new_controller->IsAnalog = false;
-                }
-                else
-                {
-                    printf("Unhandled Axis: number %d, value %d\n",
-                           j.number, j.value);
-                }
+                    else if (j.number == pad->left_thumb_y_axis)
+                    {
+                        new_controller->StickAverageY =
+                            hhxcb_process_controller_axis(j.value, dead_zone,
+                                                          axis_inverted);
+                        if (new_controller->StickAverageY != 0.0f)
+                        {
+                            new_controller->IsAnalog = true;
+                        }
+                    }
+                    else if (j.number == pad->right_thumb_x_axis)
+                    {
+                        // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                    }
+                    else if (j.number == pad->right_thumb_y_axis)
+                    {
+                        // TODO(nbm): Do something with this.  Here otherwise we get spammed.
+                    }
+                    else if (j.number == pad->dpad_x_axis)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->MoveRight,
+                                             &new_controller->MoveRight);
+                        hhxcb_process_button((j.value < 0),
+                                             &old_controller->MoveLeft,
+                                             &new_controller->MoveLeft);
+                        new_controller->IsAnalog = false;
+                    }
+                    else if (j.number == pad->dpad_y_axis)
+                    {
+                        hhxcb_process_button((j.value > 0),
+                                             &old_controller->MoveDown,
+                                             &new_controller->MoveDown);
+                        hhxcb_process_button((j.value < 0),
+                                             &old_controller->MoveUp,
+                                             &new_controller->MoveUp);
+                        new_controller->IsAnalog = false;
+                    }
+                    else
+                    {
+                        printf("Unhandled Axis: number %d, value %d\n",
+                               j.number, j.value);
+                    }
 
+                }
             }
-        }
-        if (errno != EAGAIN) {
-            context->need_controller_refresh = true;
+            if (errno != EAGAIN) {
+                context->need_controller_refresh = true;
+            }
         }
     }
 
-    XEvent event;
-    while (XPending(context->display))
     {
-		XNextEvent(context->display, &event);
-        switch(event.type)
+        TIMED_BLOCK("hhxcb Message/Keyboard/Mouse Processing");
+        
+        XEvent event;
+        while (XPending(context->display))
         {
-            case KeyPress:
-            case KeyRelease:
+            XNextEvent(context->display, &event);
+            switch(event.type)
             {
-                XKeyEvent *e = (XKeyEvent *)&event;
-                bool32 is_down = (event.type == KeyPress);
-				KeySym keysym = XLookupKeysym(e, 0);
-                if (keysym == XK_w)
+                case KeyPress:
+                case KeyRelease:
                 {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->MoveUp, is_down);
-                }
-                else if (keysym == XK_a)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->MoveLeft, is_down);
-                }
-                else if (keysym == XK_s)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->MoveDown, is_down);
-                }
-                else if (keysym == XK_d)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->MoveRight, is_down);
-                }
-                else if (keysym == XK_q)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->LeftShoulder, is_down);
-                }
-                else if (keysym == XK_e)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->RightShoulder, is_down);
-                }
-                else if (keysym == XK_Up)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->ActionUp, is_down);
-                }
-                else if (keysym == XK_Left)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->ActionLeft, is_down);
-                }
-                else if (keysym == XK_Down)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->ActionDown, is_down);
-                }
-                else if (keysym == XK_Right)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->ActionRight, is_down);
-                }
-                else if (keysym == XK_Escape)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->Back, is_down);
-                }
-                else if (keysym == XK_space)
-                {
-                    hhxcb_process_keyboard_message(&new_keyboard_controller->Start, is_down);
-                }
-                else if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R))
-                {
-                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_SHIFT], is_down);
-                }
-                else if ((keysym == XK_Alt_L) || (keysym == XK_Alt_R))
-                {
-                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_ALT], is_down);
-                }
-                else if ((keysym == XK_Control_L) || (keysym == XK_Control_R))
-                {
-                    hhxcb_process_keyboard_message(&context->modifier_keys[MOD_CONTROL], is_down);
-                }
-                else if(keysym == XK_p)
-                {
-                    if(is_down)
+                    XKeyEvent *e = (XKeyEvent *)&event;
+                    bool32 is_down = (event.type == KeyPress);
+                    KeySym keysym = XLookupKeysym(e, 0);
+                    if (keysym == XK_w)
                     {
-                        GlobalPause = !GlobalPause;
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->MoveUp, is_down);
                     }
-                }
-                else if (keysym == XK_l)
-                {
-                    if (is_down)
+                    else if (keysym == XK_a)
                     {
-                        if (state->playback_index == 0)
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->MoveLeft, is_down);
+                    }
+                    else if (keysym == XK_s)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->MoveDown, is_down);
+                    }
+                    else if (keysym == XK_d)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->MoveRight, is_down);
+                    }
+                    else if (keysym == XK_q)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->LeftShoulder, is_down);
+                    }
+                    else if (keysym == XK_e)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->RightShoulder, is_down);
+                    }
+                    else if (keysym == XK_Up)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->ActionUp, is_down);
+                    }
+                    else if (keysym == XK_Left)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->ActionLeft, is_down);
+                    }
+                    else if (keysym == XK_Down)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->ActionDown, is_down);
+                    }
+                    else if (keysym == XK_Right)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->ActionRight, is_down);
+                    }
+                    else if (keysym == XK_Escape)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->Back, is_down);
+                    }
+                    else if (keysym == XK_space)
+                    {
+                        hhxcb_process_keyboard_message(&new_keyboard_controller->Start, is_down);
+                    }
+                    else if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R))
+                    {
+                        hhxcb_process_keyboard_message(&context->modifier_keys[MOD_SHIFT], is_down);
+                    }
+                    else if ((keysym == XK_Alt_L) || (keysym == XK_Alt_R))
+                    {
+                        hhxcb_process_keyboard_message(&context->modifier_keys[MOD_ALT], is_down);
+                    }
+                    else if ((keysym == XK_Control_L) || (keysym == XK_Control_R))
+                    {
+                        hhxcb_process_keyboard_message(&context->modifier_keys[MOD_CONTROL], is_down);
+                    }
+                    else if(keysym == XK_p)
+                    {
+                        if(is_down)
                         {
-                            if (state->recording_index == 0)
+                            GlobalPause = !GlobalPause;
+                        }
+                    }
+                    else if (keysym == XK_l)
+                    {
+                        if (is_down)
+                        {
+                            if (state->playback_index == 0)
                             {
-                                hhxcb_start_recording(state, 1);
+                                if (state->recording_index == 0)
+                                {
+                                    hhxcb_start_recording(state, 1);
+                                }
+                                else
+                                {
+                                    hhxcb_stop_recording(state);
+                                    hhxcb_start_playback(state, 1);
+                                }
                             }
                             else
                             {
-                                hhxcb_stop_recording(state);
-                                hhxcb_start_playback(state, 1);
+                                hhxcb_stop_playback(state);
                             }
                         }
-                        else
+                    }
+                    break;
+                }
+                case ButtonPress:
+                case ButtonRelease:
+                {
+                    XButtonEvent *e = (XButtonEvent *)&event;
+                    bool32 is_down = (event.type == ButtonPress);
+                    if((e->button >= 1) && (e->button <= 5))
+                    {
+                        u32 mouseButtonIndex = (e->button - 1);
+                        hhxcb_process_keyboard_message(&new_input->MouseButtons[mouseButtonIndex], is_down);
+                    }
+                }
+                case NoExpose:
+                {
+                    // No idea what these are, but they're spamming me.
+                    break;
+                }
+                case MotionNotify:
+                {
+                    XMotionEvent *e = (XMotionEvent *)&event;
+                    new_input->MouseX = (r32)e->x;
+                    new_input->MouseY = (r32)((buffer->height -1) - e->y);
+                    break;
+                }
+                case ClientMessage:
+                {
+                    XClientMessageEvent *client_message_event = (XClientMessageEvent *)&event;
+
+                    if (client_message_event->message_type == context->wm_protocols)
+                    {
+                        if (client_message_event->data.l[0] == context->wm_delete_window)
                         {
-                            hhxcb_stop_playback(state);
+                            context->ending_flag = 1;
+                            break;
                         }
                     }
+                    break;
                 }
-                break;
-            }
-            case ButtonPress:
-            case ButtonRelease:
-            {
-                XButtonEvent *e = (XButtonEvent *)&event;
-                bool32 is_down = (event.type == ButtonPress);
-                if((e->button >= 1) && (e->button <= 5))
+                case ResizeRequest:
                 {
-                    u32 mouseButtonIndex = (e->button - 1);
-                    hhxcb_process_keyboard_message(&new_input->MouseButtons[mouseButtonIndex], is_down);
-                }
-            }
-            case NoExpose:
-            {
-                // No idea what these are, but they're spamming me.
-                break;
-            }
-            case MotionNotify:
-            {
-                XMotionEvent *e = (XMotionEvent *)&event;
-                new_input->MouseX = (r32)e->x;
-                new_input->MouseY = (r32)((buffer->height -1) - e->y);
-                break;
-            }
-            case ClientMessage:
-            {
-                XClientMessageEvent *client_message_event = (XClientMessageEvent *)&event;
-
-                if (client_message_event->message_type == context->wm_protocols)
-                {
-                    if (client_message_event->data.l[0] == context->wm_delete_window)
-                    {
-                        context->ending_flag = 1;
-                        break;
-                    }
-                }
-                break;
-            }
-            case ResizeRequest:
-            {
 #if 0
-                XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
-                hhxcbDisplayBufferInWindow(context, buffer,
-                                           resize->width, resize->height);
+                    XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
+                    hhxcbDisplayBufferInWindow(context, buffer,
+                                               resize->width, resize->height);
 #endif
-                break;
-            }
-            default:
-            {
-                break;
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
             }
         }
     }
@@ -1271,6 +1280,8 @@ hhxcbInitOpenGL(hhxcb_context *context)
 		{
             context->glXSwapInterval(1);
 		}
+
+        glGenTextures(1, &OpenGLReservedBlitTexture);
 	}
 	else
 	{
@@ -1315,8 +1326,6 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	// NOTE: switch between xwindows display and opengl display
     if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
 	{
-        // NOTE: in this path, the bitmap to render is sRGB format
-        glEnable(GL_FRAMEBUFFER_SRGB);
 		OpenGLRenderCommands(Commands, windowWidth, windowHeight);
 		glXSwapBuffers(context->display, context->window);
 	}
@@ -1348,14 +1357,13 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                 }
             }
 #endif
-            
-            // NOTE: in this path, the bitmap to render is not sRGB format
-            glDisable(GL_FRAMEBUFFER_SRGB);
+
             OpenGLDisplayBitmap(OutputTarget.Width,
                                 OutputTarget.Height,
                                 OutputTarget.Memory,
                                 OutputTarget.Pitch,
-                                windowWidth, windowHeight);
+                                windowWidth, windowHeight,
+                                OpenGLReservedBlitTexture);
             
             glXSwapBuffers(context->display, context->window);
 		}

@@ -1959,6 +1959,9 @@ main()
         (uint8_t *)m.PermanentStorage + m.PermanentStorageSize;
 	m.DebugStorage =
         (u8 *)m.TransientStorage + m.TransientStorageSize;
+#if HANDMADE_INTERNAL
+    m.DebugTable = GlobalDebugTable;
+#endif
 	m.HighPriorityQueue = &HighPriorityQueue;
 	m.LowPriorityQueue = &LowPriorityQueue;
 	m.PlatformAPI.AddEntry = hhxcbAddEntry;
@@ -1970,8 +1973,8 @@ main()
 	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
 	m.PlatformAPI.FileError = hhxcbFileError;
 
-    m.PlatformAPI.AllocateTexture = Win32AllocateTexture;
-    m.PlatformAPI.DeallocateTexture = Win32DeallocateTexture;
+    m.PlatformAPI.AllocateTexture = AllocateTexture;
+    m.PlatformAPI.DeallocateTexture = DeallocateTexture;
     
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
@@ -2026,9 +2029,6 @@ main()
 			hhxcbCompleteAllWork(&HighPriorityQueue);
 			hhxcbCompleteAllWork(&LowPriorityQueue);
 
-#if HANDMADE_INTERNAL
-			GlobalDebugTable = &GlobalDebugTable_;
-#endif
             hhxcb_unload_game(&game_code);
             hhxcb_load_game(&game_code, source_game_code_library_path);
 			m.ExecutableReloaded = true;
@@ -2086,7 +2086,6 @@ main()
                 {
                     context.ending_flag = true;
                 }
-                //HandleDebugCycleCounter(&m);
             }
         }
 
@@ -2162,9 +2161,15 @@ main()
 		
 		if(game_code.DEBUGFrameEnd)
 		{
-			GlobalDebugTable = game_code.DEBUGFrameEnd(&m, new_input, &RenderCommands);
+            game_code.DEBUGFrameEnd(&m, new_input, &RenderCommands);
+        }
+        else
+        {
+            // NOTE(casey): If for some reason the game didn't load,
+            // make sure we clear the debug event array so it doesn't
+            // pile up on itself.
+            GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 		}
-		GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
 
 		END_BLOCK();
 #endif

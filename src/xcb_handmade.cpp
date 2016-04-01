@@ -1189,6 +1189,10 @@ hhxcbGetThreadStartupForGL(hhxcb_context *context, GLXContext shareContext)
 internal GLXContext
 hhxcbInitOpenGL(hhxcb_context *context)
 {
+    // NOTE: don't know of wglGetExtensionsString linux equivalent, so
+    // just setting this to true
+    OpenGLSupportsSRGBFramebuffer = true;
+    
 	s32 desiredVisualPixelFormat[] =
     {	
 		GLX_RGBA,
@@ -1271,7 +1275,7 @@ hhxcbInitOpenGL(hhxcb_context *context)
         }
 
         // NOTE: this function also turns srgb on if it is supported
-        OpenGLInit(ModernContext);
+        OpenGLInit(ModernContext, OpenGLSupportsSRGBFramebuffer);
 
 		context->glXSwapInterval =
             (glx_swap_interval_mesa *)glXGetProcAddressARB(

@@ -1806,6 +1806,7 @@ debug_table *GlobalDebugTable = &GlobalDebugTable_;
 int
 main()
 {
+    DEBUGSetEventRecording(true);
 
     hhxcb_state state = {};
     hhxcb_get_binary_name(&state);
@@ -2012,37 +2013,15 @@ main()
 		//
 		//
 
-		BEGIN_BLOCK("ExecutableRefresh");
+		BEGIN_BLOCK("InputProcessing");
 		
+        new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
+        
         if (last_counter.tv_sec >= next_controller_refresh)
         {
             hhxcb_refresh_controllers(&context);
             next_controller_refresh = last_counter.tv_sec + 1;
         }
-
-		m.ExecutableReloaded = false;
-
-        struct stat library_statbuf = {};
-        stat(source_game_code_library_path, &library_statbuf);
-        if (library_statbuf.st_mtime != game_code.library_mtime)
-        {
-			hhxcbCompleteAllWork(&HighPriorityQueue);
-			hhxcbCompleteAllWork(&LowPriorityQueue);
-
-            hhxcb_unload_game(&game_code);
-            hhxcb_load_game(&game_code, source_game_code_library_path);
-			m.ExecutableReloaded = true;
-        }
-
-		END_BLOCK();
-
-		//
-		//
-		//
-
-		BEGIN_BLOCK("InputProcessing");
-		
-        new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
 
         hhxcb_process_events(&context, &state, &buffer, new_input, old_input);
 
@@ -2158,17 +2137,36 @@ main()
 		
 #if HANDMADE_INTERNAL
 		BEGIN_BLOCK("DebugCollation");
-		
+
+        struct stat library_statbuf = {};
+        stat(source_game_code_library_path, &library_statbuf);
+
+        b32 ExecutableNeedsToBeReloaded = (library_statbuf.st_mtime != game_code.library_mtime);
+
+        m.ExecutableReloaded = false;
+        if(ExecutableNeedsToBeReloaded)
+        {
+			hhxcbCompleteAllWork(&HighPriorityQueue);
+			hhxcbCompleteAllWork(&LowPriorityQueue);
+            DEBUGSetEventRecording(false);
+        }
+
 		if(game_code.DEBUGFrameEnd)
 		{
             game_code.DEBUGFrameEnd(&m, new_input, &RenderCommands);
         }
-        else
+        
+        if(ExecutableNeedsToBeReloaded)
         {
-            // NOTE(casey): If for some reason the game didn't load,
-            // make sure we clear the debug event array so it doesn't
-            // pile up on itself.
-            GlobalDebugTable_.EventArrayIndex_EventIndex = 0;
+            hhxcb_unload_game(&game_code);
+              for(u32 LoadTryIndex = 0;
+              !game_code.is_valid && (LoadTryIndex < 100);
+              ++LoadTryIndex)
+            {
+                hhxcb_load_game(&game_code, source_game_code_library_path);
+            }
+			m.ExecutableReloaded = true;
+            DEBUGSetEventRecording(game_code.is_valid);
 		}
 
 		END_BLOCK();

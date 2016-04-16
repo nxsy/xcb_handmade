@@ -88,6 +88,7 @@ struct hhxcb_game_code
 	debug_game_frame_end *DEBUGFrameEnd;
 	
     bool32 is_valid;
+    time_t mainExecutableMtime;
     time_t library_mtime;
 };
 

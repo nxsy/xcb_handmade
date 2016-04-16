@@ -68,7 +68,9 @@ mv -f build/debug/libhandmade.so.new build/debug/libhandmade.so
 #mv -f build/debug/libalternate.so.new build/debug/libalternate.so
 
 ## Platform code
+touch build/debug/lock.tmp
 g++ ${CPPSTD} ${WARNFLAGS} -o build/debug/xcb_handmade src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
+rm build/debug/lock.tmp
 
 ## Alternate platform code
 #g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/debug/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${DEBUG_FLAGS}
@@ -98,7 +100,9 @@ mv -f build/opt/libhandmade.so.new build/opt/libhandmade.so
 #mv -f build/opt/libalternate.so.new build/opt/libalternate.so
 
 ## Platform code
+touch build/opt/lock.tmp
 g++ ${CPPSTD} ${WARNFLAGS} -o build/opt/xcb_handmade src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}
+rm build/opt/lock.tmp
 
 ## Alternate platform code
 #g++ -DGAME_CODE_FILENAME=libalternate.so -std=c++0x ${WARNFLAGS} -o build/opt/xcb_alternate src/xcb_handmade.cpp ${CPPFLAGS} ${XCBLIBS} ${OPT_FLAGS}

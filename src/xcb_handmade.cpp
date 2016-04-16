@@ -103,6 +103,7 @@ enum hhxcb_rendering_type
 global_variable hhxcb_rendering_type GlobalRenderingType;
 global_variable b32 GlobalPause;
 
+#include "handmade_sort.cpp"
 #include "handmade_opengl.cpp"
 #include "handmade_render.cpp"
 
@@ -116,11 +117,6 @@ global_variable b32 GlobalPause;
 #endif
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
-#ifndef GAME_CODE_FILENAME
-#define GAME_CODE_FILENAME libhandmade.so
-#endif
-#define _HHXCB_QUOTE2(X) #X
-#define _HHXCB_QUOTE(X) _HHXCB_QUOTE2(X)
 
 internal real32
 hhxcb_process_controller_axis(int16 value, uint16 dead_zone, bool inverted)
@@ -847,9 +843,21 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
         TIMED_BLOCK("hhxcb Message/Keyboard/Mouse Processing");
         
         XEvent event;
-        while (XPending(context->display))
+        for(;;)
         {
-            XNextEvent(context->display, &event);
+            b32 gotMessage = 0;
+            {
+                TIMED_BLOCK("XPending");
+                gotMessage = XPending(context->display);
+            }
+            if(!gotMessage)
+            {
+                break;
+            }
+            {
+                TIMED_BLOCK("XNextEvent");
+                XNextEvent(context->display, &event);
+            }
             switch(event.type)
             {
                 case KeyPress:
@@ -1814,13 +1822,32 @@ main()
 
     hhxcb_state state = {};
     hhxcb_get_binary_name(&state);
-
+    
+    char mainExecutablePath[HHXCB_STATE_FILE_NAME_LENGTH];
+    char *mainExecutableFilename = (char *)"xcb_handmade";
+    hhxcb_build_full_filename(&state, mainExecutableFilename,
+            sizeof(mainExecutablePath),
+            mainExecutablePath);
+    
     char source_game_code_library_path[HHXCB_STATE_FILE_NAME_LENGTH];
-    char *game_code_filename = (char *) _HHXCB_QUOTE(GAME_CODE_FILENAME);
+    char *game_code_filename = (char *)"libhandmade.so";
     hhxcb_build_full_filename(&state, game_code_filename,
             sizeof(source_game_code_library_path),
             source_game_code_library_path);
+
     hhxcb_game_code game_code = {};
+    
+    struct stat mainExecutableStatbuf = {};
+    
+    if(!stat(mainExecutablePath, &mainExecutableStatbuf))
+    {
+        game_code.mainExecutableMtime = mainExecutableStatbuf.st_mtime;
+    }
+    else
+    {
+        printf("couldn't stat main executable: %s\n", mainExecutablePath);
+    }
+    
     hhxcb_load_game(&game_code, source_game_code_library_path);
 
     hhxcb_context context = {};
@@ -1828,8 +1855,8 @@ main()
     /* Open the connection to the X server. Use the DISPLAY environment variable */
 //    int screenNum;
 //    context.connection = xcb_connect (NULL, &screenNum);
-	context.display = XOpenDisplay(0);
-	context.connection = XGetXCBConnection(context.display);
+    context.display = XOpenDisplay(0);
+    context.connection = XGetXCBConnection(context.display);
 
     context.key_symbols = xcb_key_symbols_alloc(context.connection);
 
@@ -2147,6 +2174,32 @@ main()
 
         b32 ExecutableNeedsToBeReloaded = (library_statbuf.st_mtime != game_code.library_mtime);
 
+        // NOTE: main executable restart on compile
+#if 0
+        if(!stat(mainExecutablePath, &mainExecutableStatbuf))
+        {
+            b32 hhxcbNeedsToBeReloaded = 
+                (mainExecutableStatbuf.st_mtime != game_code.mainExecutableMtime);
+            // TODO(casey): Compare file contents here
+            if(hhxcbNeedsToBeReloaded)
+            {
+                game_code.mainExecutableMtime = mainExecutableStatbuf.st_mtime;
+                char *argv[] = {0};
+                extern char **environ;
+                struct stat lock;
+                while(!stat("./lock.tmp", &lock))
+                {
+                    sleep(1);
+                }
+                execve(mainExecutablePath, argv, environ);
+            }
+        }
+        else
+        {
+            printf("couldn't stat main executable: %s\n", mainExecutablePath);
+        }
+#endif
+
         m.ExecutableReloaded = false;
         if(ExecutableNeedsToBeReloaded)
         {
@@ -2163,9 +2216,9 @@ main()
         if(ExecutableNeedsToBeReloaded)
         {
             hhxcb_unload_game(&game_code);
-              for(u32 LoadTryIndex = 0;
-              !game_code.is_valid && (LoadTryIndex < 100);
-              ++LoadTryIndex)
+            for(u32 LoadTryIndex = 0;
+                !game_code.is_valid && (LoadTryIndex < 100);
+                ++LoadTryIndex)
             {
                 hhxcb_load_game(&game_code, source_game_code_library_path);
             }
@@ -2240,7 +2293,7 @@ main()
 		BEGIN_BLOCK("FrameDisplay");
 
         umm NeededSortMemorySize = RenderCommands.PushBufferElementCount *
-            sizeof(tile_sort_entry);
+            sizeof(sort_entry);
         if(CurrentSortMemorySize < NeededSortMemorySize)
         {
             hhxcbDeallocateMemory(SortMemory);

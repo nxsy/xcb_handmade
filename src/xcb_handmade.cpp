@@ -1323,9 +1323,10 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                            platform_work_queue *RenderQueue,
                            game_render_commands *Commands,
 						   u32 windowWidth, u32 windowHeight,
-                           void *SortMemory)
+                           void *SortMemory, void *ClipRectMemory)
 {
     SortEntries(Commands, SortMemory);
+    LinearizeClipRects(Commands, ClipRectMemory);
 
 /*  TODO(casey): Do we want to check for resources like before?  Probably? 
     if(AllResourcesPresent(RenderGroup))
@@ -1970,7 +1971,10 @@ main()
 
     umm CurrentSortMemorySize = Megabytes(1);
     void *SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
-    
+
+    umm CurrentClipMemorySize = Megabytes(1);
+    void *ClipMemory = hhxcbAllocateMemory(CurrentClipMemorySize);
+
     // TODO(casey): Decide what our pushbuffer size is!
     u32 PushBufferSize = Megabytes(64);
     void *PushBuffer = hhxcbAllocateMemory(PushBufferSize);
@@ -2301,11 +2305,20 @@ main()
             SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
         }
 
+        // TODO(casey): Collapse this with above!
+        umm NeededClipMemorySize = RenderCommands.PushBufferElementCount * sizeof(render_entry_cliprect);
+        if(CurrentClipMemorySize < NeededClipMemorySize)
+        {
+            hhxcbDeallocateMemory(ClipMemory);
+            CurrentClipMemorySize = NeededClipMemorySize;
+            ClipMemory = hhxcbAllocateMemory(CurrentClipMemorySize);
+        }
+
 		hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
 		hhxcbDisplayBufferInWindow(&context, &buffer,
                                    &HighPriorityQueue, &RenderCommands,
                                    dimension.width, dimension.height,
-                                   SortMemory);
+                                   SortMemory, ClipMemory);
 		
         game_input *temp_input = new_input;
         new_input = old_input;

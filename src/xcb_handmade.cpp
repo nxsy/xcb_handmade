@@ -1814,6 +1814,12 @@ PLATFORM_DEALLOCATE_MEMORY(hhxcbDeallocateMemory)
 #if HANDMADE_INTERNAL
 global_variable debug_table GlobalDebugTable_;
 debug_table *GlobalDebugTable = &GlobalDebugTable_;
+
+// NOTE: need to store the concatenated strings, used in
+// the TIMED_FUNCTION macro, so the debug collatation will be able to
+// reference them at the end of the frame
+global_variable debug_string GlobalDebugFunctionString_;
+debug_string *GlobalDebugFunctionString = &GlobalDebugFunctionString_;
 #endif
 
 int
@@ -1997,6 +2003,7 @@ main()
         (u8 *)m.TransientStorage + m.TransientStorageSize;
 #if HANDMADE_INTERNAL
     m.DebugTable = GlobalDebugTable;
+    m.GlobalDebugFunctionString = GlobalDebugFunctionString;
 #endif
 	m.HighPriorityQueue = &HighPriorityQueue;
 	m.LowPriorityQueue = &LowPriorityQueue;

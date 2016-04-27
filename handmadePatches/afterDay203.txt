@@ -1,0 +1,126 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 5bbaac1..c44b958 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -270,13 +270,13 @@ DEBUGVariableToText(char *Buffer, char *End, debug_variable *Var, u32 Flags)
+ 
+     if(Flags & DEBUGVarToText_AddDebugUI)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "#define DEBUGUI_");
+     }
+ 
+     if(Flags & DEBUGVarToText_AddName)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "%s%s ", Var->Name, (Flags & DEBUGVarToText_Colon) ? ":" : "");
+     }
+     
+@@ -286,50 +286,50 @@ DEBUGVariableToText(char *Buffer, char *End, debug_variable *Var, u32 Flags)
+         {
+             if(Flags & DEBUGVarToText_PrettyBools)
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "%s",
+                                   Var->Bool32 ? "true" : "false");
+             }
+             else
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "%d", Var->Bool32);
+             }
+         } break;
+ 
+         case DebugVariableType_Int32:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%d", Var->Int32);
+         } break;
+ 
+         case DebugVariableType_UInt32:                
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%u", Var->UInt32);
+         } break;
+ 
+         case DebugVariableType_V2:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V2(%f, %f)", Var->Vector2.x, Var->Vector2.y);
+         } break;
+ 
+         case DebugVariableType_V3:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V3(%f, %f, %f)", Var->Vector3.x, Var->Vector3.y, Var->Vector3.z);
+         } break;
+ 
+         case DebugVariableType_V4:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V4(%f, %f, %f, %f)", Var->Vector4.x, Var->Vector4.y, Var->Vector4.z, Var->Vector4.w);
+         } break;
+ 
+         case DebugVariableType_Real32:                
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%f", Var->Real32);
+             if(Flags & DEBUGVarToText_FloatSuffix)
+             {
+@@ -406,7 +406,7 @@ WriteHandmadeConfig(debug_state *DebugState)
+ 
+                 if(Var->Type == DebugVariableType_VarGroup)
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                                       "// ");
+                 }
+                 At += DEBUGVariableToText(At, End, Var,
+@@ -509,8 +509,8 @@ DrawProfileIn(debug_state *DebugState, rectangle2 ProfileRect, v2 MouseP)
+             {
+                 debug_record *Record = Region->Record;
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%s: %10ucy [%s(%d)]",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%s: %10lucy [%s(%d)]",
+                             Record->BlockName,
+                             Region->CycleCount,
+                             Record->FileName,
+@@ -676,7 +676,7 @@ internal debug_view *
+ GetOrCreateDebugViewFor(debug_state *DebugState, debug_id ID)
+ {
+     // TODO(casey): Better hash function
+-    u32 HashIndex = (((u32)ID.Value[0] >> 2) + ((u32)ID.Value[1] >> 2)) % ArrayCount(DebugState->ViewHash);
++    u32 HashIndex = ((u32)((u64)ID.Value[0] >> 2) + ((u64)ID.Value[1] >> 2)) % ArrayCount(DebugState->ViewHash);
+     debug_view **HashSlot = DebugState->ViewHash + HashIndex;
+ 
+     debug_view *Result = 0;
+@@ -1442,7 +1442,7 @@ DEBUGEnd(debug_state *DebugState, game_input *Input, loaded_bitmap *DrawBuffer)
+ 
+ #if 1
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                snprintf(TextBuffer, sizeof(TextBuffer),
+                             "%32s(%4d): %10ucy %8uh %10ucy/h",
+                             Counter->BlockName,
+                             Counter->LineNumber,
+@@ -1458,7 +1458,7 @@ DEBUGEnd(debug_state *DebugState, game_input *Input, loaded_bitmap *DrawBuffer)
+         if(DebugState->FrameCount)
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Last frame time: %.02fms",
+                         DebugState->Frames[DebugState->FrameCount - 1].WallSecondsElapsed * 1000.0f);
+             DEBUGTextLine(TextBuffer);

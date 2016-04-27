@@ -1,0 +1,49 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 6c9aa56..b520950 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -312,13 +312,13 @@ WriteHandmadeConfig(debug_state *DebugState)
+         {
+             case DebugVariableType_Boolean:                
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "#define DEBUGUI_%s %d\n", Var->Name, Var->Bool32);
+             } break;
+ 
+             case DebugVariableType_Group:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "// %s\n", Var->Name);
+             } break;
+         }
+@@ -506,7 +506,7 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+ 
+ #if 1
+                     char TextBuffer[256];
+-                    _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                    snprintf(TextBuffer, sizeof(TextBuffer),
+                                 "%32s(%4d): %10ucy %8uh %10ucy/h",
+                                 Counter->BlockName,
+                                 Counter->LineNumber,
+@@ -522,7 +522,7 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+             if(DebugState->FrameCount)
+             {
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                snprintf(TextBuffer, sizeof(TextBuffer),
+                             "Last frame time: %.02fms",
+                             DebugState->Frames[DebugState->FrameCount - 1].WallSecondsElapsed * 1000.0f);
+                 DEBUGTextLine(TextBuffer);
+@@ -606,8 +606,8 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+                         {
+                             debug_record *Record = Region->Record;
+                             char TextBuffer[256];
+-                            _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                                        "%s: %10ucy [%s(%d)]",
++                            snprintf(TextBuffer, sizeof(TextBuffer),
++                                        "%s: %10lucy [%s(%d)]",
+                                         Record->BlockName,
+                                         Region->CycleCount,
+                                         Record->FileName,

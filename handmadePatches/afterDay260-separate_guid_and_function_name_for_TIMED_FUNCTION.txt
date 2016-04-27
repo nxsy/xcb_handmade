@@ -1,0 +1,399 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 33a4c83..7b0f4c6 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -23,7 +23,7 @@ struct debug_parsed_name
+     char *Name;
+ };
+ inline debug_parsed_name
+-DebugParseName(char *GUID)
++DebugParseName(char *GUID, char *Name)
+ {
+     debug_parsed_name Result = {};
+ 
+@@ -56,8 +56,8 @@ DebugParseName(char *GUID)
+         Result.HashValue = 65599*Result.HashValue + *Scan;
+     }
+ 
+-    Result.NameLength = (u32)(Scan - GUID) - Result.NameStartsAt;
+-    Result.Name = GUID + Result.NameStartsAt;
++    Result.NameLength = (u32)StringLength(Name);
++    Result.Name = Name;
+ 
+     return(Result);
+ }
+@@ -82,13 +82,13 @@ GetElementFromGUID(debug_state *DebugState, u32 Index, char *GUID)
+ }
+ 
+ inline debug_element *
+-GetElementFromGUID(debug_state *DebugState, char *GUID)
++GetElementFromGUID(debug_state *DebugState, char *GUID, char *Name)
+ {
+     debug_element *Result = 0;
+     
+-    if(GUID)
++    if(GUID && Name)
+     {
+-        debug_parsed_name ParsedName = DebugParseName(GUID);
++        debug_parsed_name ParsedName = DebugParseName(GUID, Name);
+         u32 Index = (ParsedName.HashValue % ArrayCount(DebugState->ElementHash));
+         
+         Result = GetElementFromGUID(DebugState, Index, GUID);
+@@ -379,32 +379,22 @@ internal memory_index
+ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ {
+     char *At = Buffer;
+-    char *Name = Event->GUID;
+ 
+     if(Flags & DEBUGVarToText_AddDebugUI)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "#define DEBUGUI_");
+     }
+ 
+     if(Flags & DEBUGVarToText_AddName)
+     {
+-        char *UseName = Name;
++        char *UseName = Event->GUID;
+         if(!(Flags & DEBUGVarToText_ShowEntireGUID))
+         {
+-            for(char *Scan = Name;
+-                *Scan;
+-                ++Scan)
+-            {
+-                if((Scan[0] == '|') &&
+-                   (Scan[1] != 0))
+-                {
+-                    UseName = Scan + 1;
+-                }
+-            }
++            UseName = Event->Name;
+         }
+ 
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "%s%s ", UseName, (Flags & DEBUGVarToText_Colon) ? ":" : "");
+     }
+ 
+@@ -414,7 +404,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+         {
+             case DebugType_r32:                
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%f", Event->Value_r32);
+                 if(Flags & DEBUGVarToText_FloatSuffix)
+                 {
+@@ -426,46 +416,46 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+             {
+                 if(Flags & DEBUGVarToText_PrettyBools)
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%s",
+                         Event->Value_b32 ? "true" : "false");
+                 }
+                 else
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%d", Event->Value_b32);
+                 }
+             } break;
+ 
+             case DebugType_s32:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%d", Event->Value_s32);
+             } break;
+ 
+             case DebugType_u32:   
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%u", Event->Value_u32);
+             } break;
+ 
+             case DebugType_v2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V2(%f, %f)",
+                     Event->Value_v2.x, Event->Value_v2.y);
+             } break;
+ 
+             case DebugType_v3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V3(%f, %f, %f)",
+                     Event->Value_v3.x, Event->Value_v3.y, Event->Value_v3.z);
+             } break;
+ 
+             case DebugType_v4:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V4(%f, %f, %f, %f)",
+                     Event->Value_v4.x, Event->Value_v4.y,
+                     Event->Value_v4.z, Event->Value_v4.w);
+@@ -473,7 +463,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             case DebugType_rectangle2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f -> %f, %f)",
+                     Event->Value_rectangle2.Min.x,
+                     Event->Value_rectangle2.Min.y,
+@@ -483,7 +473,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             case DebugType_rectangle3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f, %f -> %f, %f, %f)",
+                     Event->Value_rectangle3.Min.x,
+                     Event->Value_rectangle3.Min.y,
+@@ -499,8 +489,8 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             default:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
+-                    "UNHANDLED: %s", Event->GUID);
++                At += snprintf(At, (size_t)(End - At),
++                               "UNHANDLED: %s%s", Event->GUID, Event->Name);
+             } break;
+         }
+     }
+@@ -855,9 +845,9 @@ DrawProfileBars(debug_state *DebugState, debug_id GraphID, rectangle2 ProfileRec
+         if(IsInRectangle(RegionRect, MouseP))
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                "%s: %10ucy",
+-                Element->GUID, Node->Duration);
++            snprintf(TextBuffer, sizeof(TextBuffer),
++                "%s%s: %10lucy",
++                Element->GUID, Element->Name, Node->Duration);
+             DEBUGTextOutAt(MouseP + V2(0.0f, DebugState->MouseTextStackY), TextBuffer);
+             DebugState->MouseTextStackY -= GetLineAdvance(DebugState);
+ 
+@@ -947,7 +937,7 @@ DEBUGDrawElement(layout *Layout, debug_tree *Tree, debug_element *Element, debug
+                 debug_frame *Frame = DebugState->MostRecentFrame;
+                 if(Frame)
+                 {
+-                    debug_element *ViewingElement = GetElementFromGUID(DebugState, View->ProfileGraph.GUID);
++                    debug_element *ViewingElement = GetElementFromGUID(DebugState, View->ProfileGraph.GUID, View->ProfileGraph.Name);
+                     if(ViewingElement)
+                     {
+                         for(debug_stored_event *Search = ViewingElement->OldestEvent;
+@@ -1226,6 +1216,7 @@ DEBUGEndInteract(debug_state *DebugState, game_input *Input, v2 MouseP)
+         {
+             debug_view *View = GetOrCreateDebugViewFor(DebugState, DebugState->Interaction.ID);
+             View->ProfileGraph.GUID = DebugState->Interaction.Element->GUID;
++            View->ProfileGraph.Name = DebugState->Interaction.Element->Name;
+         } break;
+ 
+         case DebugInteraction_ToggleValue:
+@@ -1688,7 +1679,7 @@ GetElementFromEvent(debug_state *DebugState, debug_event *Event, debug_variable_
+         Parent = DebugState->RootGroup;
+     }
+ 
+-    debug_parsed_name ParsedName = DebugParseName(Event->GUID);
++    debug_parsed_name ParsedName = DebugParseName(Event->GUID, Event->Name);
+     u32 Index = (ParsedName.HashValue % ArrayCount(DebugState->ElementHash));
+ 
+     debug_element *Result = GetElementFromGUID(DebugState, Index, Event->GUID);
+@@ -1698,6 +1689,7 @@ GetElementFromEvent(debug_state *DebugState, debug_event *Event, debug_variable_
+ 
+         Result->OriginalGUID = Event->GUID;
+         Result->GUID = PushString(&DebugState->DebugArena, Event->GUID);
++        Result->Name = PushString(&DebugState->DebugArena, Event->Name);
+         Result->FileNameCount = ParsedName.FileNameCount;
+         Result->LineNumber = ParsedName.LineNumber;
+         Result->NameStartsAt = ParsedName.NameStartsAt;
+@@ -1863,7 +1855,7 @@ CollateDebugRecords(debug_state *DebugState, u32 EventCount, debug_event *EventA
+                     open_debug_block *DebugBlock = AllocateOpenDebugBlock(
+                         DebugState, 0, FrameIndex, Event, &Thread->FirstOpenDataBlock);
+ 
+-                    debug_parsed_name ParsedName = DebugParseName(Event->GUID);
++                    debug_parsed_name ParsedName = DebugParseName(Event->GUID, Event->Name);
+                     DebugBlock->Group =
+                         GetGroupForHierarchicalName(DebugState, DefaultParentGroup, ParsedName.Name, true);
+                 } break;
+@@ -2065,8 +2057,8 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+ 
+ #if 1
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%32s(%4d): %10ucy %8uh %10ucy/h",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%32s(%4d): %10lucy %8uh %10ucy/h",
+                             Counter->BlockName,
+                             Counter->LineNumber,
+                             (u32)CycleCount.Avg,
+@@ -2081,7 +2073,7 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+         if(DebugState->MostRecentFrame)
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Last frame time: %.02fms %de %dp %dd",
+                         DebugState->MostRecentFrame->WallSecondsElapsed * 1000.0f,
+                     DebugState->MostRecentFrame->StoredEventCount,
+@@ -2090,7 +2082,7 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+                 );
+             DEBUGTextLine(TextBuffer);
+ 
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Per-frame arena space remaining: %ukb",
+                         (u32)(GetArenaSizeRemaining(&DebugState->PerFrameArena, AlignNoClear(1)) / 1024));
+             DEBUGTextLine(TextBuffer);
+diff --git a/code/handmade_debug.h b/code/handmade_debug.h
+index 78c58bf..2d526ac 100644
+--- a/code/handmade_debug.h
++++ b/code/handmade_debug.h
+@@ -33,6 +33,7 @@ struct debug_view_profile_graph
+ {
+     debug_view_inline_block Block;
+     char *GUID;
++    char *Name;
+ };
+ 
+ struct debug_view_collapsible
+@@ -103,6 +104,7 @@ struct debug_element
+ {
+     char *OriginalGUID; // NOTE(casey): Can never be printed!  Might point into unloaded DLL.
+     char *GUID;
++    char *Name;
+     u32 FileNameCount;
+     u32 LineNumber;
+     u32 NameStartsAt;
+@@ -114,7 +116,7 @@ struct debug_element
+     debug_stored_event *OldestEvent;
+     debug_stored_event *MostRecentEvent;
+ };
+-inline char *GetName(debug_element *Element) {char *Result = Element->GUID + Element->NameStartsAt; return(Result);}
++inline char *GetName(debug_element *Element) {return Element->Name;}
+ inline debug_string GetFileName(debug_element *Element) {debug_string Result = {Element->FileNameCount, Element->GUID}; return(Result);}
+ 
+ struct debug_variable_group;
+diff --git a/code/handmade_debug_interface.h b/code/handmade_debug_interface.h
+index e875519..9df1aff 100644
+--- a/code/handmade_debug_interface.h
++++ b/code/handmade_debug_interface.h
+@@ -50,6 +50,7 @@ struct debug_event
+ {
+     u64 Clock;
+     char *GUID;
++    char *Name;
+     u16 ThreadID;
+     u16 CoreIndex;
+     u8 Type;
+@@ -96,7 +97,7 @@ extern debug_table *GlobalDebugTable;
+ 
+ #define DEBUGSetEventRecording(Enabled) (GlobalDebugTable->RecordIncrement = (Enabled) ? 1 : 0)
+ 
+-#define RecordDebugEvent(EventType, GUIDInit)           \
++#define RecordDebugEvent(EventType, GUIDInit, NameInit)                             \
+ u64 ArrayIndex_EventIndex = AtomicAddU64(&GlobalDebugTable->EventArrayIndex_EventIndex, GlobalDebugTable->RecordIncrement); \
+         u32 EventIndex = ArrayIndex_EventIndex & 0xFFFFFFFF;            \
+         Assert(EventIndex < ArrayCount(GlobalDebugTable->Events[0]));   \
+@@ -105,28 +106,29 @@ u64 ArrayIndex_EventIndex = AtomicAddU64(&GlobalDebugTable->EventArrayIndex_Even
+         Event->Type = (u8)EventType;                                    \
+         Event->CoreIndex = 0;                                           \
+         Event->ThreadID = (u16)GetThreadID();                         \
+-        Event->GUID = GUIDInit;
++        Event->GUID = GUIDInit; \
++        Event->Name = NameInit;
+ 
+ #define FRAME_MARKER(SecondsElapsedInit) \
+-{RecordDebugEvent(DebugType_FrameMarker, DEBUG_NAME("Frame Marker")); \
++    {RecordDebugEvent(DebugType_FrameMarker, DEBUG_NAME(""), "Frame Marker"); \
+     Event->Value_r32 = SecondsElapsedInit;}  
+ 
+-#define TIMED_BLOCK__(GUID, Number, ...) timed_block TimedBlock_##Number(GUID, ## __VA_ARGS__)
+-#define TIMED_BLOCK_(GUID, Number, ...) TIMED_BLOCK__(GUID, Number, ## __VA_ARGS__)
+-#define TIMED_BLOCK(Name, ...) TIMED_BLOCK_(DEBUG_NAME(Name), __COUNTER__, ## __VA_ARGS__)
+-#define TIMED_FUNCTION(...) TIMED_BLOCK_(DEBUG_NAME(__FUNCTION__), ## __VA_ARGS__)
++#define TIMED_BLOCK__(GUID, Name, Number, ...) timed_block TimedBlock_##Number(GUID, Name, ## __VA_ARGS__)
++#define TIMED_BLOCK_(GUID, Name, Number, ...) TIMED_BLOCK__(GUID, Name, Number, ## __VA_ARGS__)
++#define TIMED_BLOCK(Name, ...) TIMED_BLOCK_(DEBUG_NAME(""), Name, __COUNTER__, ## __VA_ARGS__)
++#define TIMED_FUNCTION(...) TIMED_BLOCK((char *)__FUNCTION__, ##__VA_ARGS__)
+ 
+-#define BEGIN_BLOCK_(GUID) {RecordDebugEvent(DebugType_BeginBlock, GUID);}
+-#define END_BLOCK_(GUID) {RecordDebugEvent(DebugType_EndBlock, GUID);}
++#define BEGIN_BLOCK_(GUID, Name) {RecordDebugEvent(DebugType_BeginBlock, GUID, Name);}
++#define END_BLOCK_(GUID, Name) {RecordDebugEvent(DebugType_EndBlock, GUID, Name);}
+ 
+-#define BEGIN_BLOCK(Name) BEGIN_BLOCK_(DEBUG_NAME(Name))
+-#define END_BLOCK() END_BLOCK_(DEBUG_NAME("END_BLOCK_"))
++#define BEGIN_BLOCK(Name) BEGIN_BLOCK_(DEBUG_NAME(""), Name)
++#define END_BLOCK() END_BLOCK_(DEBUG_NAME(""), "END_BLOCK_")
+ 
+ struct timed_block
+ {
+-    timed_block(char *GUID, u32 HitCountInit = 1)
++    timed_block(char *GUID, char *Name, u32 HitCountInit = 1)
+     {
+-        BEGIN_BLOCK_(GUID);
++        BEGIN_BLOCK_(GUID, Name);
+         // TODO(casey): Record the hit count value here?
+     }
+     
+@@ -174,7 +176,7 @@ inline void \
+ DEBUGValueSetEventData(debug_event *Event, type Ignored, void *Value) \
+ { \
+     Event->Type = DebugType_##type; \
+-    if(GlobalDebugTable->EditEvent.GUID == Event->GUID) \
++    if((GlobalDebugTable->EditEvent.GUID == Event->GUID) && (GlobalDebugTable->EditEvent.Name == Event->Name)) \
+     { \
+         *(type *)Value = GlobalDebugTable->EditEvent.Value_##type; \
+     } \
+@@ -198,36 +200,36 @@ struct debug_data_block
+ {
+     debug_data_block(char *Name)
+     {
+-        RecordDebugEvent(DebugType_OpenDataBlock, Name);
++        RecordDebugEvent(DebugType_OpenDataBlock, DEBUG_NAME(""), Name);
+         //Event->DebugID = ID;                                      
+     }
+     
+     ~debug_data_block(void)
+     {
+-        RecordDebugEvent(DebugType_CloseDataBlock, DEBUG_NAME("End Data Block"));
++        RecordDebugEvent(DebugType_CloseDataBlock, DEBUG_NAME(""), "End Data Block");
+     }
+ };
+ 
+-#define DEBUG_DATA_BLOCK(Name) debug_data_block DataBlock__(DEBUG_NAME(Name))
++#define DEBUG_DATA_BLOCK(Name) debug_data_block DataBlock__(Name)
+ 
+ internal void DEBUGEditEventData(char *GUID, debug_event *Event);
+ 
+ #define DEBUG_VALUE(Value)  \
+      { \
+-         RecordDebugEvent(DebugType_Unknown, DEBUG_NAME(#Value));                              \
++         RecordDebugEvent(DebugType_Unknown, DEBUG_NAME(""), #Value);   \
+          DEBUGValueSetEventData(Event, Value, (void *)&Value); \
+      } 
+ 
+ #define DEBUG_B32(Value)  \
+ { \
+-    RecordDebugEvent(DebugType_Unknown, DEBUG_NAME(#Value));                              \
++    RecordDebugEvent(DebugType_Unknown, DEBUG_NAME(""), #Value);    \
+     DEBUGValueSetEventData(Event, (s32)0, (void *)&Value); \
+     Event->Type = DebugType_b32; \
+ } 
+ 
+ #define DEBUG_THREAD_INTERVAL_GRAPH(FunctionName) \
+ { \
+-    RecordDebugEvent(DebugType_ThreadIntervalGraph, DEBUG_NAME(#FunctionName));                   \
++    RecordDebugEvent(DebugType_ThreadIntervalGraph, DEBUG_NAME(""), #FunctionName); \
+ } 
+ 
+ #define DEBUG_BEGIN_ARRAY(...)

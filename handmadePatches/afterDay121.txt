@@ -1,0 +1,101 @@
+diff --git a/code/handmade_platform.h b/code/handmade_platform.h
+index d52581a..4f3b9b1 100644
+--- a/code/handmade_platform.h
++++ b/code/handmade_platform.h
+@@ -34,21 +34,29 @@ extern "C" {
+ #if !defined(COMPILER_LLVM)
+ #define COMPILER_LLVM 0
+ #endif
++
++#if !defined(COMPILER_GCC)
++#define COMPILER_GCC 0
++#endif
+ 
+-#if !COMPILER_MSVC && !COMPILER_LLVM
++#if !COMPILER_MSVC && !COMPILER_LLVM && !COMPILER_GCC
+ #if _MSC_VER
+ #undef COMPILER_MSVC
+ #define COMPILER_MSVC 1
+-#else
+-// TODO(casey): Moar compilerz!!!
++#elif __clang__
+ #undef COMPILER_LLVM
+ #define COMPILER_LLVM 1
++#elif __GNUC__
++#undef COMPILER_GCC
++#define COMPILER_GCC 1
++#else
++// TODO(casey): Moar compilerz!!!
+ #endif
+ #endif
+ 
+ #if COMPILER_MSVC
+ #include <intrin.h>
+-#elif COMPILER_LLVM
++#elif COMPILER_LLVM || COMPILER_GCC
+ #include <x86intrin.h>
+ #else
+ #error SEE/NEON optimizations are not available for this compiler yet!!!!
+@@ -161,15 +169,11 @@ typedef struct debug_cycle_counter
+ } debug_cycle_counter;
+ 
+ extern struct game_memory *DebugGlobalMemory;
+-#if _MSC_VER
++#if COMPILER_MSVC || COMPILER_LLVM || COMPILER_GCC
+ #define BEGIN_TIMED_BLOCK(ID) uint64 StartCycleCount##ID = __rdtsc();
+ #define END_TIMED_BLOCK(ID) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += __rdtsc() - StartCycleCount##ID; ++DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount;
+ // TODO(casey): Clamp END_TIMED_BLOCK_COUNTED so that if the calc is wrong, it won't overflow!
+ #define END_TIMED_BLOCK_COUNTED(ID, Count) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += __rdtsc() - StartCycleCount##ID; DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount += (Count);
+-#else
+-#define BEGIN_TIMED_BLOCK(ID) 
+-#define END_TIMED_BLOCK(ID)
+-#define END_TIMED_BLOCK_COUNTED(ID, Count)
+ #endif
+     
+ #endif
+diff --git a/code/handmade_render_group.cpp b/code/handmade_render_group.cpp
+index 5f593ff..8d39c52 100644
+--- a/code/handmade_render_group.cpp
++++ b/code/handmade_render_group.cpp
+@@ -451,11 +451,18 @@ DrawRectangleSlowly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Col
+     END_TIMED_BLOCK(DrawRectangleSlowly);
+ }
+ 
+-#if 0
++#if 0
+ #include <iacaMarks.h>
++#if COMPILER_MSVC
++#define IACA_CROSSPLATFORM_START IACA_VC64_START
++#define IACA_CROSSPLATFORM_END IACA_VC64_END
++#elif COMPILER_LLVM || COMPILER_GCC
++#define IACA_CROSSPLATFORM_START IACA_START
++#define IACA_CROSSPLATFORM_END IACA_END
++#endif
+ #else
+-#define IACA_VC64_START
+-#define IACA_VC64_END
++#define IACA_CROSSPLATFORM_START
++#define IACA_CROSSPLATFORM_END
+ #endif
+ 
+ internal void
+@@ -598,7 +605,7 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+ #define Mi(a, i) ((uint32 *)&(a))[i]
+ 
+ 
+-                IACA_VC64_START;
++                IACA_CROSSPLATFORM_START;
+                 __m128 U = _mm_add_ps(_mm_mul_ps(PixelPx, nXAxisx_4x), PynX);
+                 __m128 V = _mm_add_ps(_mm_mul_ps(PixelPx, nYAxisx_4x), PynY);
+ 
+@@ -782,9 +789,8 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+                 Pixel += 4;
+                 ClipMask = _mm_set1_epi8(-1);
+ 
+-                IACA_VC64_END;
+             }
+-        
++            IACA_CROSSPLATFORM_END;
+             Row += RowAdvance;
+         }
+         END_TIMED_BLOCK_COUNTED(ProcessPixel, GetClampedRectArea(FillRect) / 2);

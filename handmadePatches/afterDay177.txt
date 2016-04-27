@@ -1,0 +1,40 @@
+diff --git a/code/handmade.cpp b/code/handmade.cpp
+index 20ba811..362f742 100644
+--- a/code/handmade.cpp
++++ b/code/handmade.cpp
+@@ -1856,8 +1856,8 @@ OverlayCycleCounters(game_memory *Memory)
+         {
+ #if 1
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                        "%s: %I64ucy %uh %I64ucy/h",
++            snprintf(TextBuffer, sizeof(TextBuffer),
++                        "%s: %lucy %uh %lucy/h",
+                         Counter->FunctionName,
+                         Counter->CycleCount,
+                         Counter->HitCount,
+diff --git a/code/handmade_debug.h b/code/handmade_debug.h
+index c7cd959..b1a847a 100644
+--- a/code/handmade_debug.h
++++ b/code/handmade_debug.h
+@@ -7,9 +7,9 @@
+    $Notice: (C) Copyright 2015 by Molly Rocket, Inc. All Rights Reserved. $
+    ======================================================================== */
+ 
+-#define TIMED_BLOCK__(Number, ...) timed_block TimedBlock_##Number(__COUNTER__, __FILE__, __LINE__, __FUNCTION__, ## __VA_ARGS__)
++#define TIMED_BLOCK__(Number, ...) timed_block TimedBlock_##Number(__COUNTER__, (char *)__FILE__, __LINE__, (char *)__FUNCTION__, ## __VA_ARGS__)
+ #define TIMED_BLOCK_(Number, ...) TIMED_BLOCK__(Number, ## __VA_ARGS__)
+-#define TIMED_BLOCK(...) TIMED_BLOCK_(__LINE__, ## __VA_ARGS__)
++#define TIMED_BLOCK(...) TIMED_BLOCK_(__LINE__) //, ## __VA_ARGS__)
+ 
+ struct debug_record
+ {
+@@ -22,7 +22,7 @@ struct debug_record
+     u32 HitCount;
+ };
+ 
+-debug_record DebugRecordArray[];
++extern debug_record DebugRecordArray[];
+ 
+ struct timed_block
+ {

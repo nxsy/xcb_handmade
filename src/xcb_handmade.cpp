@@ -1879,7 +1879,7 @@ main()
     context.fmt = hhxcb_find_format(&context, 32, 24, 32);
 
     int monitor_refresh_hz = 60;
-    real32 game_update_hz = (monitor_refresh_hz / 2.0f); // Should almost always be an int...
+    real32 game_update_hz = monitor_refresh_hz; // Should almost always be an int...
     long target_nanoseconds_per_frame = (1000 * 1000 * 1000) / game_update_hz;
 
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;

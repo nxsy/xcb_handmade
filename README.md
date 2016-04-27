@@ -9,7 +9,7 @@ Prerequisites
 
 Most importantly, you’ll need Handmade Hero source code for the
 platform-independent game code.  Pre-order the game and get the nightly source
-code.  This revision works with day 207 or later.
+code.  This revision works with day 271 or later.
 
 You will need g++ (tested with g++ 4.6) or other C++ compiler.
 
@@ -29,6 +29,18 @@ The Advanced Linux Sound Architecture (ALSA) development packages are needed
 too:
 
 * libasound2-dev
+
+Handmade Patches
+----------------
+
+To get some days to compile with gcc or clang, it is necessary to make
+modifications to Casey's code. Diffs of the changes needed are stored in the
+handmadePatches directory by day number, just look for a file with a day
+number just before, or equal to, the day you are on and apply that diff to
+Casey's code. Some of these diff files are needed slightly before the day
+they are labeled with, if you find the code will still not compile, try one
+of the later files. You will only need to apply one of these diff files for
+any given day.
 
 Build process
 -------------

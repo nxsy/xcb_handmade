@@ -1,0 +1,81 @@
+diff --git a/code/handmade_platform.h b/code/handmade_platform.h
+index df26ec1..b6e18c4 100644
+--- a/code/handmade_platform.h
++++ b/code/handmade_platform.h
+@@ -158,9 +158,15 @@ extern struct game_memory *DebugGlobalMemory;
+ #define BEGIN_TIMED_BLOCK(ID) uint64 StartCycleCount##ID = __rdtsc();
+ #define END_TIMED_BLOCK(ID) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += __rdtsc() - StartCycleCount##ID; ++DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount;
+ #define END_TIMED_BLOCK_COUNTED(ID, Count) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += __rdtsc() - StartCycleCount##ID; DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount += (Count);
+-#else
+-#define BEGIN_TIMED_BLOCK(ID) 
+-#define END_TIMED_BLOCK(ID) 
++#elif __GNUC__ || __clang__
++inline volatile uint64 RDTSC() {
++   register uint64 TSC asm("eax");
++   asm volatile (".byte 15, 49" : : : "eax", "edx", "memory");
++   return TSC;
++}
++#define BEGIN_TIMED_BLOCK(ID) uint64 StartCycleCount##ID = RDTSC();
++#define END_TIMED_BLOCK(ID) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += RDTSC() - StartCycleCount##ID; ++DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount;
++#define END_TIMED_BLOCK_COUNTED(ID, Count) DebugGlobalMemory->Counters[DebugCycleCounter_##ID].CycleCount += RDTSC() - StartCycleCount##ID; DebugGlobalMemory->Counters[DebugCycleCounter_##ID].HitCount += (Count);
+ #endif
+     
+ #endif
+diff --git a/code/handmade_render_group.cpp b/code/handmade_render_group.cpp
+index 6059ccc..f2ab3df 100644
+--- a/code/handmade_render_group.cpp
++++ b/code/handmade_render_group.cpp
+@@ -467,8 +467,13 @@ DrawRectangleSlowly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Col
+ #if 0
+ #include <iacaMarks.h>
+ #else
++#if _MSC_VER
+ #define IACA_VC64_START
+ #define IACA_VC64_END
++#elif __GNUC__ || __clang__
++#define IACA_START
++#define IACA_END
++#endif
+ #endif
+ 
+ internal void
+@@ -593,7 +598,11 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+ #define Mi(a, i) ((uint32 *)&(a))[i]
+ 
+ 
++#if _MSC_VER
+             IACA_VC64_START;
++#elif __GNUC__ || __clang__
++            IACA_START;
++#endif
+             __m128 U = _mm_add_ps(_mm_mul_ps(PixelPx, nXAxisx_4x), _mm_mul_ps(PixelPy, nXAxisy_4x));
+             __m128 V = _mm_add_ps(_mm_mul_ps(PixelPx, nYAxisx_4x), _mm_mul_ps(PixelPy, nYAxisy_4x));
+ 
+@@ -760,9 +769,12 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+             PixelPx = _mm_add_ps(PixelPx, Four_4x);            
+             Pixel += 4;
+ 
+-            IACA_VC64_END;
+         }
+-        
++#if _MSC_VER
++            IACA_VC64_END;
++#elif __GNUC__ || __clang__
++            IACA_END;
++#endif
+         Row += Buffer->Pitch;
+     }
+     END_TIMED_BLOCK_COUNTED(ProcessPixel, (XMax - XMin + 1)*(YMax - YMin + 1));
+diff --git a/code/handmade_render_group.h b/code/handmade_render_group.h
+index 5aba828..8cca116 100644
+--- a/code/handmade_render_group.h
++++ b/code/handmade_render_group.h
+@@ -30,6 +30,8 @@
+       
+ */
+ 
++#include <emmintrin.h>
++
+ struct loaded_bitmap
+ {
+     v2 AlignPercentage;

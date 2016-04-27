@@ -1,0 +1,343 @@
+diff --git a/code/handmade.cpp b/code/handmade.cpp
+index 7444ec9..554cb00 100644
+--- a/code/handmade.cpp
++++ b/code/handmade.cpp
+@@ -14,6 +14,8 @@
+ #include "handmade_asset.cpp"
+ #include "handmade_audio.cpp"
+ 
++internal void OverlayCycleCounters(game_memory *Memory);
++
+ struct add_low_entity_result
+ {
+     low_entity *Low;
+@@ -672,6 +674,8 @@ global_variable font_id FontID;
+ internal void
+ DEBUGReset(game_assets *Assets, u32 Width, u32 Height)
+ {
++	TIMED_BLOCK();
++	
+     asset_vector MatchVector = {};
+     asset_vector WeightVector = {};
+     FontID = GetBestMatchFontFrom(Assets, Asset_Font, &MatchVector, &WeightVector);
+@@ -789,59 +793,17 @@ DEBUGTextLine(char *String)
+     }
+ }
+ 
+-internal void
+-OverlayCycleCounters(game_memory *Memory)
+-{
+-    char *NameTable[] =
+-    {
+-        "GameUpdateAndRender",
+-        "RenderGroupToOutput",
+-        "DrawRectangleSlowly",
+-        "ProcessPixel",
+-        "DrawRectangleQuickly",
+-    };
+-    DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
+-    DEBUGTextLine("111111");
+-    DEBUGTextLine("999999");
+-#if HANDMADE_INTERNAL
+-    DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
+-    for(int CounterIndex = 0;
+-        CounterIndex < ArrayCount(Memory->Counters);
+-        ++CounterIndex)
+-    {
+-        debug_cycle_counter *Counter = Memory->Counters + CounterIndex;
+-
+-        if(Counter->HitCount)
+-        {
+-#if 0
+-            char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                        "  %d: %I64ucy %uh %I64ucy/h\n",
+-                        CounterIndex,
+-                        Counter->CycleCount,
+-                        Counter->HitCount,
+-                        Counter->CycleCount / Counter->HitCount);
+-            OutputDebugStringA(TextBuffer);
+-#else
+-            DEBUGTextLine(NameTable[CounterIndex]);
+-#endif
+-        }
+-    }
+-#endif
+-    DEBUGTextLine("AVA WA Ta");
+-}
+-
+ #if HANDMADE_INTERNAL
+ game_memory *DebugGlobalMemory;
+ #endif
+ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
+ {
+     Platform = Memory->PlatformAPI;
+-    
++	
+ #if HANDMADE_INTERNAL
+     DebugGlobalMemory = Memory;
+ #endif
+-    BEGIN_TIMED_BLOCK(GameUpdateAndRender)
++    TIMED_BLOCK();
+ 
+     Assert((&Input->Controllers[0].Terminator - &Input->Controllers[0].Buttons[0]) ==
+            (ArrayCount(Input->Controllers[0].Buttons)));
+@@ -1386,6 +1348,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
+         EntityIndex < SimRegion->EntityCount;
+         ++EntityIndex)
+     {
++		TIMED_BLOCK();
+         sim_entity *Entity = SimRegion->Entities + EntityIndex;
+         if(Entity->Updatable)
+         {
+@@ -1855,8 +1818,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
+     CheckArena(&GameState->WorldArena);
+     CheckArena(&TranState->TranArena);
+ 
+-    END_TIMED_BLOCK(GameUpdateAndRender);
+-
+     OverlayCycleCounters(Memory);
+ 
+     if(DEBUGRenderGroup)
+@@ -1873,3 +1834,42 @@ extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)
+ 
+     OutputPlayingSounds(&GameState->AudioState, SoundBuffer, TranState->Assets, &TranState->TranArena);
+ }
++
++debug_record DebugRecordArray[__COUNTER__];
++
++#include <stdio.h>
++
++internal void
++OverlayCycleCounters(game_memory *Memory)
++{
++	DEBUGTextLine("\"$#%^@&*(!(*)~");
++//    DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
++//    DEBUGTextLine("111111");
++//    DEBUGTextLine("999999");
++#if HANDMADE_INTERNAL
++    DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
++    for(int CounterIndex = 0;
++        CounterIndex < ArrayCount(DebugRecords_Main);
++        ++CounterIndex)
++    {
++        debug_record *Counter = DebugRecords_Main + CounterIndex;
++
++        if(Counter->HitCount)
++        {
++#if 1
++            char TextBuffer[256];
++            snprintf(TextBuffer, sizeof(TextBuffer),
++                        "%s: %lucy %uh %lucy/h",
++                        Counter->FunctionName,
++                        Counter->CycleCount,
++                        Counter->HitCount,
++                        Counter->CycleCount / Counter->HitCount);
++            DEBUGTextLine(TextBuffer);
++			Counter->HitCount = 0;
++			Counter->CycleCount = 0;
++#endif
++        }
++    }
++#endif
++//    DEBUGTextLine("AVA WA Ta");
++}
+diff --git a/code/handmade_asset.cpp b/code/handmade_asset.cpp
+index c5bb27d..f04731f 100644
+--- a/code/handmade_asset.cpp
++++ b/code/handmade_asset.cpp
+@@ -590,6 +590,8 @@ GetBestMatchFontFrom(game_assets *Assets, asset_type_id TypeID, asset_vector *Ma
+ internal game_assets *
+ AllocateGameAssets(memory_arena *Arena, memory_index Size, transient_state *TranState)
+ {
++	TIMED_BLOCK();
++	
+     game_assets *Assets = PushStruct(Arena, game_assets);
+ 
+     Assets->NextGenerationID = 0;
+diff --git a/code/handmade_debug.h b/code/handmade_debug.h
+index 09d9433..82e38f5 100644
+--- a/code/handmade_debug.h
++++ b/code/handmade_debug.h
+@@ -7,22 +7,41 @@
+    $Notice: (C) Copyright 2015 by Molly Rocket, Inc. All Rights Reserved. $
+    ======================================================================== */
+ 
+-#define TIMED_BLOCK(ID) timed_block TimedBlock##ID(DebugCycleCounter_##ID);
++#define TIMED_BLOCK__(Number, ...) timed_block TimedBlock_##Number(__COUNTER__, (char *)__FILE__, __LINE__, (char *)__FUNCTION__) //, ## __VA_ARGS__)
++#define TIMED_BLOCK_(Number, ...) TIMED_BLOCK__(Number) //, ## __VA_ARGS__)
++#define TIMED_BLOCK(...) TIMED_BLOCK_(__LINE__) //, ## __VA_ARGS__)
++
++struct debug_record
++{
++	u64 CycleCount;
++	
++	char *FileName;
++	char *FunctionName;
++
++	u32 ThreadIndex;
++	u32 LineNumber;
++	u32 HitCount;
++};
++
++extern debug_record DebugRecordArray[];
+ 
+ struct timed_block
+ {
+-    uint64 StartCycleCount;
+-    u32 ID;
++	debug_record *Record;
+     
+-    timed_block(u32 IDInit)
++    timed_block(int Counter, char *FileName, int LineNumber, char *FunctionName, int HitCount = 1)
+     {
+-        ID = IDInit;
+-        BEGIN_TIMED_BLOCK_(StartCycleCount);
++		Record = DebugRecordArray + Counter;
++		Record->FileName = FileName;
++		Record->LineNumber = LineNumber;
++		Record->FunctionName = FunctionName;
++		Record->CycleCount -= __rdtsc();
++		Record->HitCount += HitCount;
+     }
+     
+     ~timed_block()
+     {
+-        END_TIMED_BLOCK_(StartCycleCount, ID);
++		Record->CycleCount += __rdtsc();
+     }
+ };
+ 
+diff --git a/code/handmade_optimized.cpp b/code/handmade_optimized.cpp
+index c38d7b0..8a2ce8d 100644
+--- a/code/handmade_optimized.cpp
++++ b/code/handmade_optimized.cpp
+@@ -21,7 +21,7 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+                      loaded_bitmap *Texture, real32 PixelsToMeters,
+                      rectangle2i ClipRect, bool32 Even)
+ {
+-    BEGIN_TIMED_BLOCK(DrawRectangleQuickly);
++    TIMED_BLOCK();
+     
+     // NOTE(casey): Premultiply color up front   
+     Color.rgb *= Color.a;
+@@ -143,7 +143,7 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+         int MaxY = FillRect.MaxY;
+         int MinX = FillRect.MinX;
+         int MaxX = FillRect.MaxX;
+-        BEGIN_TIMED_BLOCK(ProcessPixel);
++        TIMED_BLOCK(GetClampedRectArea(FillRect) / 2);
+         for(int Y = MinY;
+             Y < MaxY;
+             Y += 2)
+@@ -369,8 +369,7 @@ DrawRectangleQuickly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Co
+         
+             Row += RowAdvance;
+         }
+-        END_TIMED_BLOCK_COUNTED(ProcessPixel, GetClampedRectArea(FillRect) / 2);
+     }
+-    
+-    END_TIMED_BLOCK(DrawRectangleQuickly);
+ }
++
++debug_record DebugRecords_Optimized[__COUNTER__];
+diff --git a/code/handmade_platform.h b/code/handmade_platform.h
+index 852d0d5..a727b4e 100644
+--- a/code/handmade_platform.h
++++ b/code/handmade_platform.h
+@@ -163,24 +163,10 @@ typedef DEBUG_PLATFORM_READ_ENTIRE_FILE(debug_platform_read_entire_file);
+ 
+ #define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) bool32 name(char *Filename, uint32 MemorySize, void *Memory)
+ typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_platform_write_entire_file);
+-    
+-// TODO(casey): Give these things names soon!
+-enum
+-{
+-    /* 0 */ DebugCycleCounter_GameUpdateAndRender,
+-    /* 1 */ DebugCycleCounter_RenderGroupToOutput,
+-    /* 2 */ DebugCycleCounter_DrawRectangleSlowly,
+-    /* 3 */ DebugCycleCounter_ProcessPixel,
+-    /* 4 */ DebugCycleCounter_DrawRectangleQuickly,
+-    DebugCycleCounter_Count,
+-};
+-typedef struct debug_cycle_counter
+-{    
+-    uint64 CycleCount;
+-    uint32 HitCount;
+-} debug_cycle_counter;
+ 
+ extern struct game_memory *DebugGlobalMemory;
++
++#if 0
+ #if (COMPILER_MSVC || COMPILER_LLVM)
+ #define BEGIN_TIMED_BLOCK_(StartCycleCount) StartCycleCount = __rdtsc();
+ #define BEGIN_TIMED_BLOCK(ID) uint64 BEGIN_TIMED_BLOCK_(StartCycleCount##ID)
+@@ -193,7 +179,8 @@ extern struct game_memory *DebugGlobalMemory;
+ #define END_TIMED_BLOCK(ID)
+ #define END_TIMED_BLOCK_COUNTED(ID, Count)
+ #endif
+-    
++#endif
++	
+ #endif
+ 
+ /*
+@@ -356,9 +343,6 @@ typedef struct game_memory
+     platform_work_queue *LowPriorityQueue;
+ 
+     platform_api PlatformAPI;
+-#if HANDMADE_INTERNAL
+-    debug_cycle_counter Counters[DebugCycleCounter_Count];
+-#endif
+ } game_memory;
+ 
+ #define GAME_UPDATE_AND_RENDER(name) void name(game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer)
+diff --git a/code/handmade_render_group.cpp b/code/handmade_render_group.cpp
+index 8195396..0944a9a 100644
+--- a/code/handmade_render_group.cpp
++++ b/code/handmade_render_group.cpp
+@@ -187,7 +187,7 @@ DrawRectangleSlowly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Col
+                     environment_map *Bottom,
+                     real32 PixelsToMeters)
+ {
+-    BEGIN_TIMED_BLOCK(DrawRectangleSlowly);
++    TIMED_BLOCK();
+ 
+     // NOTE(casey): Premultiply color up front   
+     Color.rgb *= Color.a;
+@@ -253,7 +253,7 @@ DrawRectangleSlowly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Col
+                   XMin*BITMAP_BYTES_PER_PIXEL +
+                   YMin*Buffer->Pitch);
+ 
+-    BEGIN_TIMED_BLOCK(ProcessPixel);
++    TIMED_BLOCK((XMax - XMin + 1)*(YMax - YMin + 1));
+     for(int Y = YMin;
+         Y <= YMax;
+         ++Y)
+@@ -416,15 +416,14 @@ DrawRectangleSlowly(loaded_bitmap *Buffer, v2 Origin, v2 XAxis, v2 YAxis, v4 Col
+         
+         Row += Buffer->Pitch;
+     }
+-    END_TIMED_BLOCK_COUNTED(ProcessPixel, (XMax - XMin + 1)*(YMax - YMin + 1));
+-
+-    END_TIMED_BLOCK(DrawRectangleSlowly);
+ }
+ 
+ internal void
+ DrawBitmap(loaded_bitmap *Buffer, loaded_bitmap *Bitmap,
+            real32 RealX, real32 RealY, real32 CAlpha = 1.0f)
+ {
++	TIMED_BLOCK();
++	
+     int32 MinX = RoundReal32ToInt32(RealX);
+     int32 MinY = RoundReal32ToInt32(RealY);
+     int32 MaxX = MinX + Bitmap->Width;
+@@ -626,7 +625,7 @@ internal void
+ RenderGroupToOutput(render_group *RenderGroup, loaded_bitmap *OutputTarget,
+                     rectangle2i ClipRect, bool Even)
+ {
+-    TIMED_BLOCK(RenderGroupToOutput);
++//    TIMED_BLOCK(RenderGroupToOutput);
+ 
+     real32 NullPixelsToMeters = 1.0f;
+     

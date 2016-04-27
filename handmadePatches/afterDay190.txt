@@ -1,0 +1,81 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 1b03248..0dc7b03 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -324,7 +324,7 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+ 
+ #if 1
+                     char TextBuffer[256];
+-                    _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                    snprintf(TextBuffer, sizeof(TextBuffer),
+                                 "%32s(%4d): %10ucy %8uh %10ucy/h",
+                                 Counter->BlockName,
+                                 Counter->LineNumber,
+@@ -340,7 +340,7 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+             if(DebugState->FrameCount)
+             {
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                snprintf(TextBuffer, sizeof(TextBuffer),
+                             "Last frame time: %.02fms",
+                             DebugState->Frames[DebugState->FrameCount - 1].WallSecondsElapsed * 1000.0f);
+                 DEBUGTextLine(TextBuffer);
+@@ -422,8 +422,8 @@ DEBUGEnd(game_input *Input, loaded_bitmap *DrawBuffer)
+                     {
+                         debug_record *Record = Region->Record;
+                         char TextBuffer[256];
+-                        _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                                    "%s: %10ucy [%s(%d)]",
++                        snprintf(TextBuffer, sizeof(TextBuffer),
++                                    "%s: %10lucy [%s(%d)]",
+                                     Record->BlockName,
+                                     Region->CycleCount,
+                                     Record->FileName,
+diff --git a/code/handmade_platform.h b/code/handmade_platform.h
+index a93ccb9..9a4c4eb 100644
+--- a/code/handmade_platform.h
++++ b/code/handmade_platform.h
+@@ -402,6 +402,32 @@ inline uint32 AtomicCompareExchangeUInt32(uint32 volatile *Value, uint32 New, ui
+ 
+     return(Result);
+ }
++inline u64 AtomicExchangeU64(u64 volatile *Value, u64 New)
++{
++    u64 Result = __sync_lock_test_and_set((u64 *)Value, New);
++
++    return(Result);
++}
++inline u64 AtomicAddU64(u64 volatile *Value, u64 Addend)
++{
++    // NOTE(casey): Returns the original value _prior_ to adding
++    u64 Result = __sync_fetch_and_add((u64 *)Value, Addend);
++
++    return(Result);
++}
++inline u32 GetThreadID(void)
++{
++       u32 ThreadID;
++#if defined(__i386__)
++    asm("movl %%gs:0x08,%0" : "=r"(ThreadID));
++#elif defined(__x86_64__)
++    asm("mov %%fs:0x10,%0" : "=r"(ThreadID));
++#else
++#error Unsupported architecture
++#endif
++    return ThreadID;
++}
++
+ #else
+ // TODO(casey): Other compilers/platforms??
+ #endif
+@@ -509,8 +535,8 @@ extern debug_table *GlobalDebugTable;
+ 
+ #define TIMED_BLOCK__(BlockName, Number, ...) timed_block TimedBlock_##Number(__COUNTER__, __FILE__, __LINE__, BlockName, ## __VA_ARGS__)
+ #define TIMED_BLOCK_(BlockName, Number, ...) TIMED_BLOCK__(BlockName, Number, ## __VA_ARGS__)
+-#define TIMED_BLOCK(BlockName, ...) TIMED_BLOCK_(#BlockName, __LINE__, ## __VA_ARGS__)
+-#define TIMED_FUNCTION(...) TIMED_BLOCK_(__FUNCTION__, __LINE__, ## __VA_ARGS__)
++#define TIMED_BLOCK(BlockName, ...) TIMED_BLOCK_(#BlockName, __LINE__) //, ## __VA_ARGS__)
++#define TIMED_FUNCTION(...) TIMED_BLOCK_((char *)__FUNCTION__, __LINE__) //, ## __VA_ARGS__)
+ 
+ #define BEGIN_BLOCK_(Counter, FileNameInit, LineNumberInit, BlockNameInit)          \
+     {debug_record *Record = GlobalDebugTable->Records[TRANSLATION_UNIT_INDEX] + Counter; \

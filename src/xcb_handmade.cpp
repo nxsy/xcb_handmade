@@ -2050,7 +2050,7 @@ main()
 
 		BEGIN_BLOCK("InputProcessing");
 		
-        new_input->dtForFrame = target_nanoseconds_per_frame / (1024.0 * 1024 * 1024);
+        new_input->dtForFrame = target_nanoseconds_per_frame / (1000.0 * 1000.0 * 1000.0);
         
         if (last_counter.tv_sec >= next_controller_refresh)
         {

@@ -1339,8 +1339,13 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	// NOTE: switch between xwindows display and opengl display
     if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
 	{
+        BEGIN_BLOCK("OpenGLRenderCommands");
 		OpenGLRenderCommands(Commands, windowWidth, windowHeight);
+        END_BLOCK();
+        
+        BEGIN_BLOCK("SwapBuffers");
 		glXSwapBuffers(context->display, context->window);
+        END_BLOCK();
 	}
 	else
     {

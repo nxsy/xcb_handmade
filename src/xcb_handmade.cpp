@@ -2301,8 +2301,7 @@ main()
 
 		BEGIN_BLOCK("FrameDisplay");
 
-        umm NeededSortMemorySize = RenderCommands.PushBufferElementCount *
-            sizeof(sort_entry);
+        umm NeededSortMemorySize = GetSortTempMemorySize(&RenderCommands);
         if(CurrentSortMemorySize < NeededSortMemorySize)
         {
             hhxcbDeallocateMemory(SortMemory);

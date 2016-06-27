@@ -1150,10 +1150,10 @@ void hhxcb_init_alsa(hhxcb_context *context, hhxcb_sound_output *soundOutput)
 //	    printf("set period size: %d\n", sound_output->samples_per_second / 60);
 	
 	// NOTE: "snd_pcm_hw_params_set_buffer_size" takes a buffer size
-	// parameter in frames (i.e. (total samples) / (number of channels))
-    err = snd_pcm_hw_params_set_buffer_size(context->alsa_handle, hwparams, soundOutput->sample_count);
+	// parameter in frames, what alsa calls a multi channel sample)
+    err = snd_pcm_hw_params_set_buffer_size(context->alsa_handle, hwparams, soundOutput->buffer_size_in_samples);
 	if(!err)
-		printf("set buffer size: %d\n", soundOutput->sample_count);
+		printf("set buffer size: %d\n", soundOutput->buffer_size_in_samples);
 	
     err = snd_pcm_hw_params(context->alsa_handle, hwparams);
 	if(!err)
@@ -1969,8 +1969,8 @@ main()
 	sound_output.channels = 2;
     sound_output.bytes_per_sample = sizeof(int16) * sound_output.channels;
 	// NOTE: one second buffer
-	sound_output.sample_count = sound_output.samples_per_second;
-    sound_output.sound_buffer_size = sound_output.sample_count * sound_output.bytes_per_sample;
+	sound_output.buffer_size_in_samples = sound_output.samples_per_second;
+    sound_output.buffer_size_in_bytes = sound_output.buffer_size_in_samples * sound_output.bytes_per_sample;
 	sound_output.safety_samples = (uint32)(((real32)sound_output.samples_per_second / game_update_hz)/3.0f);
     hhxcb_init_alsa(&context, &sound_output);
 
@@ -1986,7 +1986,7 @@ main()
 	
 	// TODO: remove maxpossibleoverrun
 	u32 MaxPossibleOverrun = 2*8*sizeof(u16);
-    int16 *sample_buffer = (int16 *)calloc((sound_output.sound_buffer_size + MaxPossibleOverrun), 1);
+    int16 *sample_buffer = (int16 *)calloc((sound_output.buffer_size_in_bytes + MaxPossibleOverrun), 1);
 
     game_memory m = {};
     m.PermanentStorageSize = Megabytes(256);
@@ -2120,15 +2120,15 @@ main()
         {
             snd_pcm_sframes_t delay, avail;
             snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
-            u32 samplesToFill = 0;
-            u32 expectedSamplesPerFrame = (sound_output.samples_per_second / game_update_hz);
-            u32 samplesInBuffer = sound_output.sample_count - avail;
+            s32 samplesToFill = 0;
+            s32 expectedSamplesPerFrame = (sound_output.samples_per_second / game_update_hz);
+            s32 samplesInBuffer = sound_output.buffer_size_in_samples - avail;
             Assert(samplesInBuffer >= 0);
             // NOTE: asymptote "samplesInBuffer" to "period_size*4", since the
             // soundcard will interrupt to get samples every "period_size"
             // samples. On this machine it is ~1000 samples
             s32 sampleAdjustment = (samplesInBuffer - (sound_output.period_size*4)) / 2;
-            if(sound_output.sample_count == avail)
+            if(sound_output.buffer_size_in_samples == avail)
             {
                 // NOTE: initial fill on startup and after an underrun
                 samplesToFill = (expectedSamplesPerFrame*2) + sound_output.safety_samples;
@@ -2136,6 +2136,10 @@ main()
             else
             {
                 samplesToFill = expectedSamplesPerFrame - sampleAdjustment;
+                if(samplesToFill < 0)
+                {
+                    samplesToFill = 0;
+                }
             }
             Assert(samplesToFill >= 0);
 		
@@ -2143,7 +2147,9 @@ main()
             sound_buffer.SamplesPerSecond = sound_output.samples_per_second;
             sound_buffer.SampleCount = Align8((samplesToFill));
             sound_buffer.Samples = sample_buffer;
-		
+
+            Assert(sound_buffer.SampleCount >= 0);
+            
             if(game_code.GetSoundSamples)
             {
                 game_code.GetSoundSamples(&m, &sound_buffer);
@@ -2151,7 +2157,7 @@ main()
 #define SOUND_DEBUG 0
 #if SOUND_DEBUG
             // NOTE: "delay" is the delay of the soundcard hardware
-            printf("samples in buffer before write: %ld delay in samples: %ld\n", (sound_output.sample_count - avail), delay);
+            printf("samples in buffer before write: %ld delay in samples: %ld\n", (sound_output.buffer_size_in_samples - avail), delay);
 #endif
             s32 writtenSamples = snd_pcm_writei(context.alsa_handle, sample_buffer, sound_buffer.SampleCount);
             if(writtenSamples < 0)
@@ -2165,7 +2171,7 @@ main()
 
 #if SOUND_DEBUG
             snd_pcm_avail_delay(context.alsa_handle, &avail, &delay);
-            printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.sample_count - avail + writtenSamples), delay, writtenSamples);
+            printf("samples in buffer after write: %ld delay in samples: %ld written samples: %d\n", (sound_output.buffer_size_in_samples - avail + writtenSamples), delay, writtenSamples);
 #endif
         }
         

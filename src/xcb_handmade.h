@@ -187,9 +187,9 @@ struct hhxcb_sound_output
     int samples_per_second;
     uint32 running_sample_index;
     int bytes_per_sample;
-    uint32 sound_buffer_size;
+    u32 buffer_size_in_samples;
+	u32 buffer_size_in_bytes;
 	uint32 safety_samples;
 	u32 channels;
 	u64 period_size;
-	u32 sample_count;
 };

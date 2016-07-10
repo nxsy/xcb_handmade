@@ -1325,7 +1325,8 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 						   u32 windowWidth, u32 windowHeight,
                            void *SortMemory, void *ClipRectMemory)
 {
-    SortEntries(Commands, SortMemory);
+    // TODO(casey): Move this into platform-specific layer!
+    //SortEntries(Commands, SortMemory);
     LinearizeClipRects(Commands, ClipRectMemory);
 
 /*  TODO(casey): Do we want to check for resources like before?  Probably? 

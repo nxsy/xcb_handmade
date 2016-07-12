@@ -105,6 +105,7 @@ global_variable b32 GlobalPause;
 
 #include "handmade_sort.cpp"
 #include "handmade_opengl.cpp"
+#include "handmade_render.h"
 #include "handmade_render.cpp"
 
 #define internal static
@@ -1323,12 +1324,12 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                            platform_work_queue *RenderQueue,
                            game_render_commands *Commands,
 						   u32 windowWidth, u32 windowHeight,
-                           void *SortMemory, void *ClipRectMemory)
+                           memory_arena *TempArena)
 {
-    // TODO(casey): Move this into platform-specific layer!
-    //SortEntries(Commands, SortMemory);
-    LinearizeClipRects(Commands, ClipRectMemory);
-
+    temporary_memory TempMem = BeginTemporaryMemory(TempArena);
+    
+    game_render_prep Prep = PrepForRender(Commands, TempArena);
+    
 /*  TODO(casey): Do we want to check for resources like before?  Probably? 
     if(AllResourcesPresent(RenderGroup))
     {
@@ -1341,7 +1342,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
     if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
 	{
         BEGIN_BLOCK("OpenGLRenderCommands");
-		OpenGLRenderCommands(Commands, windowWidth, windowHeight);
+		OpenGLRenderCommands(Commands, &Prep, windowWidth, windowHeight);
         END_BLOCK();
         
         BEGIN_BLOCK("SwapBuffers");
@@ -1360,7 +1361,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
             OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
             OutputTarget.Pitch = buffer->pitch;
 
-            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget);
 #if 0
             // NOTE: buffer clear
             u32 *pixel = (u32 *)OutputTarget.Memory;
@@ -1398,7 +1399,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                 (buffer->pitch*(buffer->height-1));
             OutputTarget.Pitch = -buffer->pitch;
 
-            SoftwareRenderCommands(RenderQueue, Commands, &OutputTarget);
+            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget);
             
             // NOTE: copy xcb_image to pixmap
             xcb_image_put(context->connection, buffer->xcb_pixmap_id,
@@ -1414,6 +1415,8 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
             //xcb_flush(context->connection);
         }
     }
+    
+    EndTemporaryMemory(TempMem);
 }
 
 internal void
@@ -1975,12 +1978,11 @@ main()
 	sound_output.safety_samples = (uint32)(((real32)sound_output.samples_per_second / game_update_hz)/3.0f);
     hhxcb_init_alsa(&context, &sound_output);
 
-    umm CurrentSortMemorySize = Megabytes(1);
-    void *SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
-
-    umm CurrentClipMemorySize = Megabytes(1);
-    void *ClipMemory = hhxcbAllocateMemory(CurrentClipMemorySize);
-
+    // TODO(casey): Let's make this our first growable arena!
+    memory_arena FrameTempArena;
+    memory_index FrameTempArenaSize = Megabytes(64);
+    InitializeArena(&FrameTempArena, FrameTempArenaSize, hhxcbAllocateMemory(FrameTempArenaSize));
+    
     // TODO(casey): Decide what our pushbuffer size is!
     u32 PushBufferSize = Megabytes(64);
     void *PushBuffer = hhxcbAllocateMemory(PushBufferSize);
@@ -2308,28 +2310,11 @@ main()
 
 		BEGIN_BLOCK("FrameDisplay");
 
-        umm NeededSortMemorySize = GetSortTempMemorySize(&RenderCommands);
-        if(CurrentSortMemorySize < NeededSortMemorySize)
-        {
-            hhxcbDeallocateMemory(SortMemory);
-            CurrentSortMemorySize = NeededSortMemorySize;
-            SortMemory = hhxcbAllocateMemory(CurrentSortMemorySize);
-        }
-
-        // TODO(casey): Collapse this with above!
-        umm NeededClipMemorySize = RenderCommands.PushBufferElementCount * sizeof(render_entry_cliprect);
-        if(CurrentClipMemorySize < NeededClipMemorySize)
-        {
-            hhxcbDeallocateMemory(ClipMemory);
-            CurrentClipMemorySize = NeededClipMemorySize;
-            ClipMemory = hhxcbAllocateMemory(CurrentClipMemorySize);
-        }
-
 		hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
 		hhxcbDisplayBufferInWindow(&context, &buffer,
                                    &HighPriorityQueue, &RenderCommands,
                                    dimension.width, dimension.height,
-                                   SortMemory, ClipMemory);
+                                   &FrameTempArena);
 		
         game_input *temp_input = new_input;
         new_input = old_input;

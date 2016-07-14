@@ -102,10 +102,11 @@ enum hhxcb_rendering_type
 };
 global_variable hhxcb_rendering_type GlobalRenderingType;
 global_variable b32 GlobalPause;
+global_variable b32 GlobalShowSortGroups = true;
 
 #include "handmade_sort.cpp"
-#include "handmade_opengl.cpp"
 #include "handmade_render.h"
+#include "handmade_opengl.cpp"
 #include "handmade_render.cpp"
 
 #define internal static
@@ -2050,6 +2051,7 @@ main()
         {DEBUG_DATA_BLOCK("Platform/Controls");
             DEBUG_B32(GlobalPause);
             DEBUG_B32(GlobalRenderingType);
+            DEBUG_B32(GlobalShowSortGroups);
         }
         
 		//

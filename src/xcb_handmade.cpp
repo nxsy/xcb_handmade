@@ -102,7 +102,7 @@ enum hhxcb_rendering_type
 };
 global_variable hhxcb_rendering_type GlobalRenderingType;
 global_variable b32 GlobalPause;
-global_variable b32 GlobalShowSortGroups = true;
+global_variable b32 GlobalShowSortGroups;
 
 #include "handmade_sort.cpp"
 #include "handmade_render.h"

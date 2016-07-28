@@ -100,7 +100,7 @@ enum hhxcb_rendering_type
     hhxcbRenderType_RenderSoftware_DisplayOpenGL,
     hhxcbRenderType_RenderSoftware_DisplayGDI,
 };
-global_variable hhxcb_rendering_type GlobalRenderingType;
+global_variable hhxcb_rendering_type GlobalRenderingType = hhxcbRenderType_RenderSoftware_DisplayOpenGL;
 global_variable b32 GlobalPause;
 global_variable b32 GlobalShowSortGroups;
 
@@ -1362,7 +1362,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
             OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
             OutputTarget.Pitch = buffer->pitch;
 
-            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget);
+            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget, TempArena);
 #if 0
             // NOTE: buffer clear
             u32 *pixel = (u32 *)OutputTarget.Memory;
@@ -1400,7 +1400,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
                 (buffer->pitch*(buffer->height-1));
             OutputTarget.Pitch = -buffer->pitch;
 
-            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget);
+            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget, TempArena);
             
             // NOTE: copy xcb_image to pixmap
             xcb_image_put(context->connection, buffer->xcb_pixmap_id,

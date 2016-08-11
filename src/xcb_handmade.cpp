@@ -100,9 +100,21 @@ enum hhxcb_rendering_type
     hhxcbRenderType_RenderSoftware_DisplayOpenGL,
     hhxcbRenderType_RenderSoftware_DisplayGDI,
 };
-global_variable hhxcb_rendering_type GlobalRenderingType = hhxcbRenderType_RenderSoftware_DisplayOpenGL;
+global_variable hhxcb_rendering_type GlobalRenderingType;
 global_variable b32 GlobalPause;
 global_variable b32 GlobalShowSortGroups;
+
+#undef GL_ARB_framebuffer_object
+
+typedef void gl_bind_framebuffer(GLenum target, GLuint framebuffer);
+typedef void gl_gen_framebuffers(GLsizei n, GLuint *framebuffers);
+typedef void gl_framebuffer_texture_2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+typedef u32 gl_check_framebuffer_status(GLenum target);
+
+global_variable gl_bind_framebuffer *glBindFramebuffer;
+global_variable gl_gen_framebuffers *glGenFramebuffers;
+global_variable gl_framebuffer_texture_2D *glFramebufferTexture2D;
+global_variable gl_check_framebuffer_status *glCheckFramebufferStatus;
 
 #include "handmade_sort.cpp"
 #include "handmade_render.h"
@@ -1285,7 +1297,14 @@ hhxcbInitOpenGL(hhxcb_context *context)
         }
 
         // NOTE: this function also turns srgb on if it is supported
-        OpenGLInit(ModernContext, OpenGLSupportsSRGBFramebuffer);
+        opengl_info Info = OpenGLInit(ModernContext, OpenGLSupportsSRGBFramebuffer);
+        if(Info.GL_ARB_framebuffer_object)
+        {
+            glBindFramebuffer = (gl_bind_framebuffer *)glXGetProcAddress((const GLubyte*)"glBindFramebuffer");
+            glGenFramebuffers = (gl_gen_framebuffers *)glXGetProcAddress((const GLubyte*)"glGenFramebuffers");
+            glFramebufferTexture2D = (gl_framebuffer_texture_2D *)glXGetProcAddress((const GLubyte*)"glFramebufferTexture2D");
+            glCheckFramebufferStatus = (gl_check_framebuffer_status *)glXGetProcAddress((const GLubyte*)"glCheckFramebufferStatus");
+        }
 
 		context->glXSwapInterval =
             (glx_swap_interval_mesa *)glXGetProcAddressARB(

@@ -94,13 +94,9 @@ global_variable b32 OpenGLSupportsSRGBFramebuffer;
 global_variable GLuint OpenGLDefaultInternalTextureFormat;
 global_variable GLuint OpenGLReservedBlitTexture;
 
-enum hhxcb_rendering_type
-{
-    hhxcbRenderType_RenderOpenGL_DisplayOpenGL,
-    hhxcbRenderType_RenderSoftware_DisplayOpenGL,
-    hhxcbRenderType_RenderSoftware_DisplayGDI,
-};
-global_variable hhxcb_rendering_type GlobalRenderingType;
+global_variable b32 GlobalSoftwareRendering;
+global_variable u32 GlobalWindowWidth;
+global_variable u32 GlobalWindowHeight;
 global_variable b32 GlobalPause;
 global_variable b32 GlobalShowSortGroups;
 
@@ -677,7 +673,7 @@ hhxcb_process_keyboard_message(game_button_state *new_state, bool32 is_down)
 }
 
 internal void
-hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen_buffer *buffer, game_input *new_input, game_input *old_input)
+hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen_buffer *buffer, game_render_commands *RenderCommands, rectangle2i *DrawRegion, game_input *new_input, game_input *old_input)
 {
     game_controller_input *old_keyboard_controller = GetController(old_input, 0);
     game_controller_input *new_keyboard_controller = GetController(new_input, 0);
@@ -990,8 +986,18 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 case MotionNotify:
                 {
                     XMotionEvent *e = (XMotionEvent *)&event;
-                    new_input->MouseX = (r32)e->x;
-                    new_input->MouseY = (r32)((buffer->height -1) - e->y);
+
+                    r32 MouseX = (r32)e->x;
+                    // NOTE: X11 window has 0,0 position in upper left
+                    // corner, windows has 0,0 in lower left
+                    r32 MouseY = (r32)(buffer->height - e->y);
+                            
+                    r32 MouseU = Clamp01MapToRange((r32)DrawRegion->MinX, MouseX, (r32)DrawRegion->MaxX);
+                    r32 MouseV = Clamp01MapToRange((r32)DrawRegion->MinY, MouseY, (r32)DrawRegion->MaxY);
+                            
+                    new_input->MouseX = (r32)RenderCommands->Width*MouseU;
+                    new_input->MouseY = (r32)RenderCommands->Height*MouseV;
+
                     break;
                 }
                 case ClientMessage:
@@ -1010,8 +1016,10 @@ hhxcb_process_events(hhxcb_context *context, hhxcb_state *state, hhxcb_offscreen
                 }
                 case ResizeRequest:
                 {
-#if 0
                     XResizeRequestEvent *resize = (XResizeRequestEvent *)&event;
+                    GlobalWindowWidth = resize->width;
+                    GlobalWindowHeight = resize->height;
+#if 0
                     hhxcbDisplayBufferInWindow(context, buffer,
                                                resize->width, resize->height);
 #endif
@@ -1343,7 +1351,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 						   hhxcb_offscreen_buffer *buffer,
                            platform_work_queue *RenderQueue,
                            game_render_commands *Commands,
-						   u32 windowWidth, u32 windowHeight,
+						   rectangle2i DrawRegion,
                            memory_arena *TempArena)
 {
     temporary_memory TempMem = BeginTemporaryMemory(TempArena);
@@ -1357,84 +1365,37 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
         &DrawBuffer, &TranState->TranArena);
     }
 */
+    
+    if(GlobalSoftwareRendering)
+    {
+        loaded_bitmap OutputTarget;
+        OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
+        OutputTarget.Width = buffer->width;
+		OutputTarget.Height = buffer->height;
+        OutputTarget.Pitch = buffer->pitch;
 
-	// NOTE: switch between xwindows display and opengl display
-    if(GlobalRenderingType == hhxcbRenderType_RenderOpenGL_DisplayOpenGL)
+        SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget, TempArena);
+
+        OpenGLDisplayBitmap(OutputTarget.Width,
+                            OutputTarget.Height,
+                            OutputTarget.Memory,
+                            OutputTarget.Pitch,
+                            DrawRegion,
+                            Commands->ClearColor,
+                            OpenGLReservedBlitTexture);
+            
+        glXSwapBuffers(context->display, context->window);
+    }
+	else
 	{
         BEGIN_BLOCK("OpenGLRenderCommands");
-		OpenGLRenderCommands(Commands, &Prep, windowWidth, windowHeight);
+		OpenGLRenderCommands(Commands, &Prep, DrawRegion);
         END_BLOCK();
         
         BEGIN_BLOCK("SwapBuffers");
 		glXSwapBuffers(context->display, context->window);
         END_BLOCK();
 	}
-	else
-    {
-        loaded_bitmap OutputTarget;
-		
-		OutputTarget.Width = buffer->width;
-		OutputTarget.Height = buffer->height;
-		
-		if(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayOpenGL)
-		{
-            OutputTarget.Memory = (uint8*)buffer->xcb_image->data;
-            OutputTarget.Pitch = buffer->pitch;
-
-            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget, TempArena);
-#if 0
-            // NOTE: buffer clear
-            u32 *pixel = (u32 *)OutputTarget.Memory;
-            for(u32 verPos = 0;
-                verPos < OutputTarget.Height;
-                ++verPos)
-            {
-                for(u32 horPos = 0;
-                horPos < OutputTarget.Width;
-                ++horPos, ++pixel)
-                {
-                    *pixel = 0x00000000;
-                }
-            }
-#endif
-
-            OpenGLDisplayBitmap(OutputTarget.Width,
-                                OutputTarget.Height,
-                                OutputTarget.Memory,
-                                OutputTarget.Pitch,
-                                windowWidth, windowHeight,
-                                OpenGLReservedBlitTexture);
-            
-            glXSwapBuffers(context->display, context->window);
-		}
-		else
-		{
-            Assert(GlobalRenderingType == hhxcbRenderType_RenderSoftware_DisplayGDI);
-
-            // NOTE: setup OutputTarget.Memory upside down and set
-            // game_buffer.pitch negative, so the game would fill the
-            // backbuffer upside down. XCB doesn't seem to have an
-            // option to flip the image.
-            OutputTarget.Memory = ((uint8*)buffer->xcb_image->data)+
-                (buffer->pitch*(buffer->height-1));
-            OutputTarget.Pitch = -buffer->pitch;
-
-            SoftwareRenderCommands(RenderQueue, Commands, &Prep, &OutputTarget, TempArena);
-            
-            // NOTE: copy xcb_image to pixmap
-            xcb_image_put(context->connection, buffer->xcb_pixmap_id,
-                          buffer->xcb_gcontext_id, buffer->xcb_image,
-                          0, 0, 0);
-            //xcb_flush(context->connection);
-		
-            // NOTE: copy pixmap to window
-            xcb_copy_area(context->connection, buffer->xcb_pixmap_id,
-                          context->window, buffer->xcb_gcontext_id,
-                          0,0, 0, 0, buffer->xcb_image->width,
-                          buffer->xcb_image->height);
-            //xcb_flush(context->connection);
-        }
-    }
     
     EndTemporaryMemory(TempMem);
 }
@@ -1967,12 +1928,7 @@ main()
     xcb_flush(context.connection);
 
 	GLXContext OpenGLContext = 0;
-#if 1
-			OpenGLContext = hhxcbInitOpenGL(&context);
-#else
-			GlobalRenderingType = hhxcbRenderType_RenderSoftware_DisplayGDI;
-#endif
-
+    OpenGLContext = hhxcbInitOpenGL(&context);
 
     hhxcb_thread_startup HighPriStartups[10] = {};
 	sem_t HighQueueSemaphoreHandle = {};
@@ -2069,7 +2025,7 @@ main()
         // proper audio debugging
         {DEBUG_DATA_BLOCK("Platform/Controls");
             DEBUG_B32(GlobalPause);
-            DEBUG_B32(GlobalRenderingType);
+            DEBUG_B32(GlobalSoftwareRendering);
             DEBUG_B32(GlobalShowSortGroups);
         }
         
@@ -2078,7 +2034,30 @@ main()
 		//
 
 		BEGIN_BLOCK("InputProcessing");
-		
+
+        game_render_commands RenderCommands = RenderCommandStruct(
+            PushBufferSize, PushBuffer,
+            buffer.width,
+            buffer.height);
+        
+        // NOTE: XGetGeometry does not seem to get the right values. It just
+        // seems to return the initially set values.
+		//hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
+        //printf("x: %d   y: %d   w: %d  h: %d\n", dimension.x, dimension.y, dimension.width, dimension.height);
+
+        rectangle2i DrawRegion = AspectRatioFit(
+            RenderCommands.Width, RenderCommands.Height,
+            GlobalWindowWidth, GlobalWindowHeight);
+
+        // NOTE: modifying DrawRegion Y values for strange x11/glviewport
+        // behavior, it seems like glViewport takes x11's convention of
+        // positioning Y from the top, with down positive to the top of
+        // the viewport being displayed (even though in the docs it says it
+        // measures from the bottom left corner of the window to the bottom
+        // left corner of the viewport)
+        DrawRegion.MinY += buffer.height - GlobalWindowHeight;
+        DrawRegion.MaxY += buffer.height - GlobalWindowHeight;
+        
         new_input->dtForFrame = target_nanoseconds_per_frame / (1000.0 * 1000.0 * 1000.0);
         
         if (last_counter.tv_sec >= next_controller_refresh)
@@ -2087,7 +2066,8 @@ main()
             next_controller_refresh = last_counter.tv_sec + 1;
         }
 
-        hhxcb_process_events(&context, &state, &buffer, new_input, old_input);
+        hhxcb_process_events(&context, &state, &buffer, &RenderCommands,
+                             &DrawRegion, new_input, old_input);
 
 		END_BLOCK();
 
@@ -2096,11 +2076,6 @@ main()
 		//
 
 		BEGIN_BLOCK("GameUpdate");
-
-        game_render_commands RenderCommands = RenderCommandStruct(
-            PushBufferSize, PushBuffer,
-            buffer.width,
-            buffer.height);
 
         if(!GlobalPause)
         {
@@ -2331,10 +2306,9 @@ main()
 
 		BEGIN_BLOCK("FrameDisplay");
 
-		hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
 		hhxcbDisplayBufferInWindow(&context, &buffer,
                                    &HighPriorityQueue, &RenderCommands,
-                                   dimension.width, dimension.height,
+                                   DrawRegion,
                                    &FrameTempArena);
 		
         game_input *temp_input = new_input;

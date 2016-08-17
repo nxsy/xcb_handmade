@@ -1993,9 +1993,6 @@ main()
 	m.PlatformAPI.ReadDataFromFile = hhxcbReadDataFromFile;
 	m.PlatformAPI.FileError = hhxcbFileError;
 
-    m.PlatformAPI.AllocateTexture = AllocateTexture;
-    m.PlatformAPI.DeallocateTexture = DeallocateTexture;
-    
 	m.PlatformAPI.AllocateMemory = hhxcbAllocateMemory;
 	m.PlatformAPI.DeallocateMemory = hhxcbDeallocateMemory;
 	

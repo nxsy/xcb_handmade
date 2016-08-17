@@ -1,0 +1,348 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 974220c..f1d3575 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -295,13 +295,13 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+     if(Flags & DEBUGVarToText_AddDebugUI)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "#define DEBUGUI_");
+     }
+ 
+     if(Flags & DEBUGVarToText_AddName)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "%s%s ", Name, (Flags & DEBUGVarToText_Colon) ? ":" : "");
+     }
+     
+@@ -309,7 +309,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+     {
+         case DebugType_r32:                
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%f", Event->Value_r32);
+             if(Flags & DEBUGVarToText_FloatSuffix)
+             {
+@@ -321,46 +321,46 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+         {
+             if(Flags & DEBUGVarToText_PrettyBools)
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "%s",
+                                   Event->Value_b32 ? "true" : "false");
+             }
+             else
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                                   "%d", Event->Value_b32);
+             }
+         } break;
+ 
+         case DebugType_s32:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%d", Event->Value_s32);
+         } break;
+ 
+         case DebugType_u32:   
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%u", Event->Value_u32);
+         } break;
+ 
+         case DebugType_v2:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V2(%f, %f)",
+                               Event->Value_v2.x, Event->Value_v2.y);
+         } break;
+ 
+         case DebugType_v3:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V3(%f, %f, %f)",
+                               Event->Value_v3.x, Event->Value_v3.y, Event->Value_v3.z);
+         } break;
+ 
+         case DebugType_v4:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "V4(%f, %f, %f, %f)",
+                               Event->Value_v4.x, Event->Value_v4.y,
+                               Event->Value_v4.z, Event->Value_v4.w);
+@@ -368,7 +368,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+         case DebugType_rectangle2:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "Rect2(%f, %f -> %f, %f)",
+                               Event->Value_rectangle2.Min.x,
+                               Event->Value_rectangle2.Min.y,
+@@ -378,7 +378,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+         case DebugType_rectangle3:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "Rect2(%f, %f, %f -> %f, %f, %f)",
+                               Event->Value_rectangle3.Min.x,
+                               Event->Value_rectangle3.Min.y,
+@@ -395,13 +395,13 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+         
+         case DebugType_OpenDataBlock:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "%s", Event->BlockName);
+         } break;
+ 
+         default:
+         {
+-            At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++            At += snprintf(At, (size_t)(End - At),
+                               "UNHANDLED: %s", Event->BlockName);
+         } break;
+     }
+@@ -467,7 +467,7 @@ WriteHandmadeConfig(debug_state *DebugState)
+ 
+                 if(Var->Type == DebugVariableType_VarGroup)
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                                       "// ");
+                 }
+                 At += DEBUGVariableToText(At, End, Var,
+@@ -582,8 +582,8 @@ DrawProfileIn(debug_state *DebugState, rectangle2 ProfileRect, v2 MouseP)
+             {
+                 debug_event *Record = Region->Event;
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%s: %10ucy [%s(%d)]",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%s: %10lucy [%s(%d)]",
+                             Record->BlockName,
+                             Region->CycleCount,
+                             Record->FileName,
+@@ -1941,27 +1941,27 @@ DEBUGDumpStruct(u32 MemberCount, member_definition *MemberDefs, void *StructPtr,
+             {
+                 case MetaType_u32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %u", Member->Name, *(u32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %u", Member->Name, *(u32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_b32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %u", Member->Name, *(b32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %u", Member->Name, *(b32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_s32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %d", Member->Name, *(s32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %d", Member->Name, *(s32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_r32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %f", Member->Name, *(r32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %f", Member->Name, *(r32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_v2:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: {%f,%f}",
++                    snprintf(TextBuffer, TextBufferLeft, "%s: {%f,%f}",
+                                 Member->Name,
+                                 ((v2 *)MemberPtr)->x,
+                                 ((v2 *)MemberPtr)->y);
+@@ -1969,7 +1969,7 @@ DEBUGDumpStruct(u32 MemberCount, member_definition *MemberDefs, void *StructPtr,
+ 
+                 case MetaType_v3:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: {%f,%f,%f}",
++                    snprintf(TextBuffer, TextBufferLeft, "%s: {%f,%f,%f}",
+                                 Member->Name,
+                                 ((v3 *)MemberPtr)->x,
+                                 ((v3 *)MemberPtr)->y,
+@@ -2069,8 +2069,8 @@ DEBUGEnd(debug_state *DebugState, game_input *Input, loaded_bitmap *DrawBuffer)
+ 
+ #if 1
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%32s(%4d): %10ucy %8uh %10ucy/h",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%32s(%4d): %10lucy %8uh %10ucy/h",
+                             Counter->BlockName,
+                             Counter->LineNumber,
+                             (u32)CycleCount.Avg,
+@@ -2085,12 +2085,12 @@ DEBUGEnd(debug_state *DebugState, game_input *Input, loaded_bitmap *DrawBuffer)
+         if(DebugState->MostRecentFrame)
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Last frame time: %.02fms",
+                         DebugState->MostRecentFrame->WallSecondsElapsed * 1000.0f);
+             DEBUGTextLine(TextBuffer);
+ 
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Per-frame arena space remaining: %ukb",
+                         (u32)(GetArenaSizeRemaining(&DebugState->PerFrameArena, 1) / 1024));
+             DEBUGTextLine(TextBuffer);
+diff --git a/code/handmade_generated.h b/code/handmade_generated.h
+index 9b10f23..c118f0e 100644
+--- a/code/handmade_generated.h
++++ b/code/handmade_generated.h
+@@ -1,69 +1,69 @@
+-member_definition MembersOf_sim_entity_collision_volume[] = 
+-{
+-   {0, MetaType_v3, "OffsetP", PointerToU32(&((sim_entity_collision_volume *)0)->OffsetP)},
+-   {0, MetaType_v3, "Dim", PointerToU32(&((sim_entity_collision_volume *)0)->Dim)},
+-};
+-member_definition MembersOf_sim_entity_collision_volume_group[] = 
+-{
+-   {0, MetaType_sim_entity_collision_volume, "TotalVolume", PointerToU32(&((sim_entity_collision_volume_group *)0)->TotalVolume)},
+-   {0, MetaType_u32, "VolumeCount", PointerToU32(&((sim_entity_collision_volume_group *)0)->VolumeCount)},
+-   {MetaMemberFlag_IsPointer, MetaType_sim_entity_collision_volume, "Volumes", PointerToU32(&((sim_entity_collision_volume_group *)0)->Volumes)},
+-};
+-member_definition MembersOf_sim_entity[] = 
+-{
+-   {MetaMemberFlag_IsPointer, MetaType_world_chunk, "OldChunk", PointerToU32(&((sim_entity *)0)->OldChunk)},
+-   {0, MetaType_u32, "StorageIndex", PointerToU32(&((sim_entity *)0)->StorageIndex)},
+-   {0, MetaType_b32, "Updatable", PointerToU32(&((sim_entity *)0)->Updatable)},
+-   {0, MetaType_entity_type, "Type", PointerToU32(&((sim_entity *)0)->Type)},
+-   {0, MetaType_u32, "Flags", PointerToU32(&((sim_entity *)0)->Flags)},
+-   {0, MetaType_v3, "P", PointerToU32(&((sim_entity *)0)->P)},
+-   {0, MetaType_v3, "dP", PointerToU32(&((sim_entity *)0)->dP)},
+-   {0, MetaType_r32, "DistanceLimit", PointerToU32(&((sim_entity *)0)->DistanceLimit)},
+-   {MetaMemberFlag_IsPointer, MetaType_sim_entity_collision_volume_group, "Collision", PointerToU32(&((sim_entity *)0)->Collision)},
+-   {0, MetaType_r32, "FacingDirection", PointerToU32(&((sim_entity *)0)->FacingDirection)},
+-   {0, MetaType_r32, "tBob", PointerToU32(&((sim_entity *)0)->tBob)},
+-   {0, MetaType_s32, "dAbsTileZ", PointerToU32(&((sim_entity *)0)->dAbsTileZ)},
+-   {0, MetaType_u32, "HitPointMax", PointerToU32(&((sim_entity *)0)->HitPointMax)},
+-   {0, MetaType_hit_point, "HitPoint", PointerToU32(&((sim_entity *)0)->HitPoint)},
+-   {0, MetaType_entity_reference, "Sword", PointerToU32(&((sim_entity *)0)->Sword)},
+-   {0, MetaType_v2, "WalkableDim", PointerToU32(&((sim_entity *)0)->WalkableDim)},
+-   {0, MetaType_r32, "WalkableHeight", PointerToU32(&((sim_entity *)0)->WalkableHeight)},
+-};
+-member_definition MembersOf_sim_region[] = 
+-{
+-   {MetaMemberFlag_IsPointer, MetaType_world, "World", PointerToU32(&((sim_region *)0)->World)},
+-   {0, MetaType_r32, "MaxEntityRadius", PointerToU32(&((sim_region *)0)->MaxEntityRadius)},
+-   {0, MetaType_r32, "MaxEntityVelocity", PointerToU32(&((sim_region *)0)->MaxEntityVelocity)},
+-   {0, MetaType_world_position, "Origin", PointerToU32(&((sim_region *)0)->Origin)},
+-   {0, MetaType_rectangle3, "Bounds", PointerToU32(&((sim_region *)0)->Bounds)},
+-   {0, MetaType_rectangle3, "UpdatableBounds", PointerToU32(&((sim_region *)0)->UpdatableBounds)},
+-   {0, MetaType_u32, "MaxEntityCount", PointerToU32(&((sim_region *)0)->MaxEntityCount)},
+-   {0, MetaType_u32, "EntityCount", PointerToU32(&((sim_region *)0)->EntityCount)},
+-   {MetaMemberFlag_IsPointer, MetaType_sim_entity, "Entities", PointerToU32(&((sim_region *)0)->Entities)},
+-   {0, MetaType_sim_entity_hash, "Hash", PointerToU32(&((sim_region *)0)->Hash)},
+-};
+-member_definition MembersOf_rectangle2[] = 
+-{
+-   {0, MetaType_v2, "Min", PointerToU32(&((rectangle2 *)0)->Min)},
+-   {0, MetaType_v2, "Max", PointerToU32(&((rectangle2 *)0)->Max)},
+-};
+-member_definition MembersOf_rectangle3[] = 
+-{
+-   {0, MetaType_v3, "Min", PointerToU32(&((rectangle3 *)0)->Min)},
+-   {0, MetaType_v3, "Max", PointerToU32(&((rectangle3 *)0)->Max)},
+-};
+-member_definition MembersOf_world_position[] = 
+-{
+-   {0, MetaType_s32, "ChunkX", PointerToU32(&((world_position *)0)->ChunkX)},
+-   {0, MetaType_s32, "ChunkY", PointerToU32(&((world_position *)0)->ChunkY)},
+-   {0, MetaType_s32, "ChunkZ", PointerToU32(&((world_position *)0)->ChunkZ)},
+-   {0, MetaType_v3, "Offset_", PointerToU32(&((world_position *)0)->Offset_)},
+-};
+-#define META_HANDLE_TYPE_DUMP(MemberPtr, NextIndentLevel) \
+-    case MetaType_world_position: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_world_position), MembersOf_world_position, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_rectangle3: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_rectangle3), MembersOf_rectangle3, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_rectangle2: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_rectangle2), MembersOf_rectangle2, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_sim_region: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_region), MembersOf_sim_region, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_sim_entity: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity), MembersOf_sim_entity, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_sim_entity_collision_volume_group: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity_collision_volume_group), MembersOf_sim_entity_collision_volume_group, MemberPtr, (NextIndentLevel));} break; \
+-    case MetaType_sim_entity_collision_volume: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity_collision_volume), MembersOf_sim_entity_collision_volume, MemberPtr, (NextIndentLevel));} break; 
++member_definition MembersOf_sim_entity_collision_volume[] = 
++{
++   {0, MetaType_v3, "OffsetP", PointerToU32(&((sim_entity_collision_volume *)0)->OffsetP)},
++   {0, MetaType_v3, "Dim", PointerToU32(&((sim_entity_collision_volume *)0)->Dim)},
++};
++member_definition MembersOf_sim_entity_collision_volume_group[] = 
++{
++   {0, MetaType_sim_entity_collision_volume, "TotalVolume", PointerToU32(&((sim_entity_collision_volume_group *)0)->TotalVolume)},
++   {0, MetaType_u32, "VolumeCount", PointerToU32(&((sim_entity_collision_volume_group *)0)->VolumeCount)},
++   {MetaMemberFlag_IsPointer, MetaType_sim_entity_collision_volume, "Volumes", PointerToU32(&((sim_entity_collision_volume_group *)0)->Volumes)},
++};
++member_definition MembersOf_sim_entity[] = 
++{
++   {MetaMemberFlag_IsPointer, MetaType_world_chunk, "OldChunk", PointerToU32(&((sim_entity *)0)->OldChunk)},
++   {0, MetaType_u32, "StorageIndex", PointerToU32(&((sim_entity *)0)->StorageIndex)},
++   {0, MetaType_b32, "Updatable", PointerToU32(&((sim_entity *)0)->Updatable)},
++   {0, MetaType_entity_type, "Type", PointerToU32(&((sim_entity *)0)->Type)},
++   {0, MetaType_u32, "Flags", PointerToU32(&((sim_entity *)0)->Flags)},
++   {0, MetaType_v3, "P", PointerToU32(&((sim_entity *)0)->P)},
++   {0, MetaType_v3, "dP", PointerToU32(&((sim_entity *)0)->dP)},
++   {0, MetaType_r32, "DistanceLimit", PointerToU32(&((sim_entity *)0)->DistanceLimit)},
++   {MetaMemberFlag_IsPointer, MetaType_sim_entity_collision_volume_group, "Collision", PointerToU32(&((sim_entity *)0)->Collision)},
++   {0, MetaType_r32, "FacingDirection", PointerToU32(&((sim_entity *)0)->FacingDirection)},
++   {0, MetaType_r32, "tBob", PointerToU32(&((sim_entity *)0)->tBob)},
++   {0, MetaType_s32, "dAbsTileZ", PointerToU32(&((sim_entity *)0)->dAbsTileZ)},
++   {0, MetaType_u32, "HitPointMax", PointerToU32(&((sim_entity *)0)->HitPointMax)},
++   {0, MetaType_hit_point, "HitPoint", PointerToU32(&((sim_entity *)0)->HitPoint)},
++   {0, MetaType_entity_reference, "Sword", PointerToU32(&((sim_entity *)0)->Sword)},
++   {0, MetaType_v2, "WalkableDim", PointerToU32(&((sim_entity *)0)->WalkableDim)},
++   {0, MetaType_r32, "WalkableHeight", PointerToU32(&((sim_entity *)0)->WalkableHeight)},
++};
++member_definition MembersOf_sim_region[] = 
++{
++   {MetaMemberFlag_IsPointer, MetaType_world, "World", PointerToU32(&((sim_region *)0)->World)},
++   {0, MetaType_r32, "MaxEntityRadius", PointerToU32(&((sim_region *)0)->MaxEntityRadius)},
++   {0, MetaType_r32, "MaxEntityVelocity", PointerToU32(&((sim_region *)0)->MaxEntityVelocity)},
++   {0, MetaType_world_position, "Origin", PointerToU32(&((sim_region *)0)->Origin)},
++   {0, MetaType_rectangle3, "Bounds", PointerToU32(&((sim_region *)0)->Bounds)},
++   {0, MetaType_rectangle3, "UpdatableBounds", PointerToU32(&((sim_region *)0)->UpdatableBounds)},
++   {0, MetaType_u32, "MaxEntityCount", PointerToU32(&((sim_region *)0)->MaxEntityCount)},
++   {0, MetaType_u32, "EntityCount", PointerToU32(&((sim_region *)0)->EntityCount)},
++   {MetaMemberFlag_IsPointer, MetaType_sim_entity, "Entities", PointerToU32(&((sim_region *)0)->Entities)},
++   {0, MetaType_sim_entity_hash, "Hash", PointerToU32(&((sim_region *)0)->Hash)},
++};
++member_definition MembersOf_rectangle2[] = 
++{
++   {0, MetaType_v2, "Min", PointerToU32(&((rectangle2 *)0)->Min)},
++   {0, MetaType_v2, "Max", PointerToU32(&((rectangle2 *)0)->Max)},
++};
++member_definition MembersOf_rectangle3[] = 
++{
++   {0, MetaType_v3, "Min", PointerToU32(&((rectangle3 *)0)->Min)},
++   {0, MetaType_v3, "Max", PointerToU32(&((rectangle3 *)0)->Max)},
++};
++member_definition MembersOf_world_position[] = 
++{
++   {0, MetaType_s32, "ChunkX", PointerToU32(&((world_position *)0)->ChunkX)},
++   {0, MetaType_s32, "ChunkY", PointerToU32(&((world_position *)0)->ChunkY)},
++   {0, MetaType_s32, "ChunkZ", PointerToU32(&((world_position *)0)->ChunkZ)},
++   {0, MetaType_v3, "Offset_", PointerToU32(&((world_position *)0)->Offset_)},
++};
++#define META_HANDLE_TYPE_DUMP(MemberPtr, NextIndentLevel) \
++    case MetaType_world_position: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_world_position), MembersOf_world_position, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_rectangle3: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_rectangle3), MembersOf_rectangle3, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_rectangle2: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_rectangle2), MembersOf_rectangle2, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_sim_region: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_region), MembersOf_sim_region, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_sim_entity: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity), MembersOf_sim_entity, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_sim_entity_collision_volume_group: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity_collision_volume_group), MembersOf_sim_entity_collision_volume_group, MemberPtr, (NextIndentLevel));} break; \
++    case MetaType_sim_entity_collision_volume: {DEBUGTextLine(Member->Name); DEBUGDumpStruct(ArrayCount(MembersOf_sim_entity_collision_volume), MembersOf_sim_entity_collision_volume, MemberPtr, (NextIndentLevel));} break; 

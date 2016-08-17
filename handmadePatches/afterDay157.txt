@@ -1,0 +1,43 @@
+diff --git a/code/handmade.cpp b/code/handmade.cpp
+index 6f6f6ff..d33446a 100644
+--- a/code/handmade.cpp
++++ b/code/handmade.cpp
+@@ -1064,7 +1064,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
+     loaded_bitmap *DrawBuffer = &DrawBuffer_;
+     DrawBuffer->Width = SafeTruncateToUInt16(Buffer->Width);
+     DrawBuffer->Height = SafeTruncateToUInt16(Buffer->Height);
+-    DrawBuffer->Pitch = SafeTruncateToUInt16(Buffer->Pitch);
++    DrawBuffer->Pitch = SafeTruncateToInt16(Buffer->Pitch);
+     DrawBuffer->Memory = Buffer->Memory;
+ 
+ #if 0
+diff --git a/code/handmade_platform.h b/code/handmade_platform.h
+index afb9395..1cf0186 100644
+--- a/code/handmade_platform.h
++++ b/code/handmade_platform.h
+@@ -139,7 +139,7 @@ SafeTruncateUInt64(uint64 Value)
+     uint32 Result = (uint32)Value;
+     return(Result);
+ }
+-    
++
+ inline uint16
+ SafeTruncateToUInt16(int32 Value)
+ {
+@@ -149,6 +149,16 @@ SafeTruncateToUInt16(int32 Value)
+     uint16 Result = (uint16)Value;
+     return(Result);
+ }
++	
++inline int16
++SafeTruncateToInt16(int32 Value)
++{
++    // TODO(casey): Defines for maximum values
++    Assert(Value <= 32767);
++    Assert(Value >= -32768);
++    int16 Result = (int16)Value;
++    return(Result);
++}
+ 
+ /*
+   NOTE(casey): Services that the platform layer provides to the game

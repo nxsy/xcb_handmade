@@ -2,6 +2,9 @@
 /src/handmade.h
 /src/handmade.cpp
 /src/handmade_*
+/src/stb_truetype.h
+/src/test_asset_builder.*
+/src/simple_preprocessor.*
 /src/xcb_handmade.config
 /src/xcb_handmade.creator
 /src/xcb_handmade.creator.user
@@ -9,3 +12,11 @@
 /src/xcb_handmade.includes
 /build
 /data/test
+/data/test2
+/data/test3
+/data/test.hha
+/data/test1.hha
+/data/test2.hha
+/data/test3.hha
+/data/testfonts.hha
+/data/intro_art.hha

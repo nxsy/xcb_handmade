@@ -53,13 +53,42 @@ struct hhxcb_state {
     char *one_past_binary_filename_slash;
 };
 
+struct platform_work_queue_entry
+{
+	platform_work_queue_callback* Callback;
+	void* Data;
+};
+
+struct platform_work_queue
+{
+	uint32 volatile CompletionGoal;
+	uint32 volatile CompletionCount;
+	uint32 volatile NextEntryToWrite;
+	uint32 volatile NextEntryToRead;
+
+	sem_t* SemaphoreHandle;
+	
+	platform_work_queue_entry Entries[256];
+};
+
+struct hhxcb_thread_startup
+{
+    xcb_window_t window;
+	Display *display;
+    GLXContext OpenGLContext;
+    platform_work_queue *Queue;
+};
+
 struct hhxcb_game_code
 {
     void *library_handle;
     game_update_and_render *UpdateAndRender;
     game_get_sound_samples *GetSoundSamples;
 
+	debug_game_frame_end *DEBUGFrameEnd;
+	
     bool32 is_valid;
+    time_t mainExecutableMtime;
     time_t library_mtime;
 };
 
@@ -70,10 +99,21 @@ struct hhxcb_offscreen_buffer
     xcb_gcontext_t xcb_gcontext_id;
 
     void *memory;
-    int width;
-    int height;
-    int pitch;
-    int bytes_per_pixel;
+    u32 width;
+    u32 height;
+    s32 pitch;
+    s32 bytes_per_pixel;
+};
+
+struct hhxcb_window_dimension
+{
+	Window rootWindow;
+	s32 x;
+	s32 y;
+	u32 width;
+	u32 height;
+	u32 borderWidth;
+	u32 depth;
 };
 
 struct hhxcb_controller_info {
@@ -99,6 +139,16 @@ struct hhxcb_controller_info {
     int start_button;
 };
 
+enum modifiers
+{
+	MOD_SHIFT,
+	MOD_ALT,
+	MOD_CONTROL,
+};
+
+typedef u32 glx_swap_interval_mesa(s32 interval);
+typedef GLXContext glx_create_context_attribs_arb(Display *display, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list);
+
 struct hhxcb_context
 {
     bool32 ending_flag;
@@ -108,6 +158,14 @@ struct hhxcb_context
     xcb_connection_t *connection;
     xcb_key_symbols_t *key_symbols;
     xcb_window_t window;
+	Display *display;
+    GLXFBConfig FBConfig;
+
+    b32 useSoftwareRendering;
+    
+	GLuint openGLTextureHandle;
+    glx_swap_interval_mesa *glXSwapInterval;
+    glx_create_context_attribs_arb *glXCreateContextAttribsARB;
 
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_window;
@@ -118,7 +176,9 @@ struct hhxcb_context
     bool32 need_controller_refresh;
     hhxcb_controller_info controller_info[HHXCB_MAX_CONTROLLERS];
 
-    snd_pcm_t *handle;
+	game_button_state modifier_keys[3];
+	
+    snd_pcm_t *alsa_handle;
     snd_output_t *alsa_log;
 };
 
@@ -127,5 +187,9 @@ struct hhxcb_sound_output
     int samples_per_second;
     uint32 running_sample_index;
     int bytes_per_sample;
-    uint32 secondary_buffer_size;
+    u32 buffer_size_in_samples;
+	u32 buffer_size_in_bytes;
+	uint32 safety_samples;
+	u32 channels;
+	u64 period_size;
 };

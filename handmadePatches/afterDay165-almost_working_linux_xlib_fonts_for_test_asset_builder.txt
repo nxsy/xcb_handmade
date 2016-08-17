@@ -1,0 +1,251 @@
+diff --git a/code/test_asset_builder.cpp b/code/test_asset_builder.cpp
+index c0c2833..006b1da 100644
+--- a/code/test_asset_builder.cpp
++++ b/code/test_asset_builder.cpp
+@@ -8,10 +8,13 @@
+ 
+ #include "test_asset_builder.h"
+ 
+-#define USE_FONTS_FROM_WINDOWS 1
++#define USE_FONTS_FROM_WINDOWS 0
++#define USE_FONTS_FROM_XWINDOWS 1
+ 
+ #if USE_FONTS_FROM_WINDOWS
+ #include <windows.h>
++#elif USE_FONTS_FROM_XWINDOWS
++#include <X11/Xlib.h>
+ #else
+ #define STB_TRUETYPE_IMPLEMENTATION
+ #include "stb_truetype.h"
+@@ -377,6 +380,222 @@ LoadGlyphBitmap(char *FileName, char *FontName, u32 Codepoint)
+         }
+     }
+ 
++#elif USE_FONTS_FROM_XWINDOWS
++
++	s32 MaxWidth = 1024;
++    s32 MaxHeight = 1024;
++	static s32 FontWidth = 0;
++	static s32 FontHeight = 0;
++    static void *Bits = 0;
++	static Display *display = 0;
++	if(!display)
++	{
++		display = XOpenDisplay(0);
++	}
++	static u32 screen = 0;
++	if(!screen)
++	{
++		screen = XDefaultScreen(display);
++	}
++	static GC graphicsContext = 0;
++	static XImage *charBitmap = 0;
++	static Pixmap pixmap = {};
++    //static HDC DeviceContext = 0;
++    if(!graphicsContext)
++    {
++		u32 depth = XDefaultDepth(display, screen);
++		pixmap = XCreatePixmap(display, XDefaultRootWindow(display), MaxHeight, MaxWidth, depth);
++
++		graphicsContext = XDefaultGC(display, screen);
++		//graphicsContext = XCreateGC(display, pixmap, 0, 0);
++        //DeviceContext = CreateCompatibleDC(GetDC(0));
++
++		Font courier = XLoadFont(display, "*-adobe-courier-medium-r-normal--34-240-100-100-m-200-iso8859-9");
++		XFontStruct *courierStruct = XQueryFont(display, courier); 
++
++		FontWidth = courierStruct->max_bounds.width;
++		FontHeight = (courierStruct->max_bounds.ascent + courierStruct->max_bounds.descent);
++		//	XGCValues values = {};
++		//values.font = courier;
++		//XChangeGC(display, graphicsContext, GCFont, &values);
++
++		XSetFont(display, graphicsContext, courier);
++		XSetForeground(display, graphicsContext, 0xFFFFFF);
++		XSetBackground(display, graphicsContext, 0x00000000);
++		
++		XGCValues *values_return = (XGCValues *)malloc(sizeof(XGCValues));
++		Status gcStatus = XGetGCValues(display, graphicsContext, GCFont, values_return);
++
++		Visual *visual = XDefaultVisual(display, screen);
++		Bits = malloc(MaxWidth * 4 * MaxHeight);
++		u8 *Row = (u8 *)Bits;
++		for(s32 Y = 0;
++			Y < MaxHeight;
++			++Y)
++		{
++			u32 *pixel = (u32 *)Row;
++			for(s32 Y = 0;
++				Y < MaxWidth;
++				++Y)
++			{
++				*pixel = 0x00000000;
++				++pixel;
++			}
++
++			Row += (MaxWidth * 4);
++		}
++		charBitmap = XCreateImage(display, visual, depth, ZPixmap, 0, (char *)Bits, MaxWidth, MaxHeight, 32, (MaxWidth * 4));
++		
++		XPutImage(display, pixmap, graphicsContext, charBitmap, 0, 0, 0, 0, MaxWidth, MaxHeight);
++    }
++	
++	s32 Width = FontWidth;
++	s32 Height = FontHeight;
++	
++//	u32 mask = GCForeground | GCBackground | GCFont
++	;
++//	XGCValues values = {}
++
++	char cheesePoint = (char)Codepoint;
++
++	//XFillRectangle(display, pixmap, graphicsContext, 0, 0, MaxWidth, MaxHeight);
++
++	XDrawString(display, pixmap, graphicsContext, 10, 10, &cheesePoint, 1);
++	
++	XFlush(display);
++	XSync(display, 0);
++	
++	charBitmap = XGetImage(display, pixmap, 0, 0, MaxWidth, MaxHeight, AllPlanes, ZPixmap);
++
++#if 0
++	u8 *Row = (u8 *)charBitmap->data;
++	for(s32 Y = 0;
++		Y < MaxHeight;
++		++Y)
++	{
++		u32 *pixel = (u32 *)Row;
++		for(s32 Y = 0;
++			Y < MaxWidth;
++			++Y)
++		{
++			Assert(*pixel == 0x00000000);
++			++pixel;
++		}
++
++		Row += (MaxWidth * 4);
++	}
++#endif
++
++    if(Width > MaxWidth)
++    {
++        Width = MaxWidth;
++    }
++    if(Height > MaxHeight)
++    {
++        Height = MaxHeight;
++    }
++
++    s32 MinX = 10000;
++    s32 MinY = 10000;
++    s32 MaxX = -10000;
++    s32 MaxY = -10000;
++
++    u32 *Row = (u32 *)charBitmap->data;
++    for(s32 Y = 0;
++        Y < Height;
++        ++Y)
++    {
++        u32 *Pixel = Row;
++        for(s32 X = 0;
++            X < Width;
++            ++X)
++        {
++#if 1
++            u32 RefPixel = charBitmap->f.get_pixel(charBitmap, X, Y);
++				//XGetPixel(charBitmap, X, Y);
++            Assert(RefPixel == *Pixel);
++#endif
++            if(*Pixel != 0)
++            {
++                if(MinX > X)
++                {
++                    MinX = X;                    
++                }
++
++                if(MinY > Y)
++                {
++                    MinY = Y;                    
++                }
++                
++                if(MaxX < X)
++                {
++                    MaxX = X;                    
++                }
++
++                if(MaxY < Y)
++                {
++                    MaxY = Y;                    
++                }
++            }
++
++            ++Pixel;
++        }
++        Row += MaxWidth;
++    }
++
++    if(MinX <= MaxX)
++    {
++#if 0
++        // TODO(casey): Apron!
++        --MinX;
++        --MinY;
++        ++MaxX;
++        ++MaxY;
++#endif        
++        Width = (MaxX - MinX) + 1;
++        Height = (MaxY - MinY) + 1;
++        
++        Result.Width = Width + 2;
++        Result.Height = Height + 2;
++        Result.Pitch = Result.Width*BITMAP_BYTES_PER_PIXEL;
++        Result.Memory = malloc(Result.Height*Result.Pitch);
++        Result.Free = Result.Memory;
++
++        memset(Result.Memory, 0, Result.Height*Result.Pitch);
++
++        u8 *DestRow = (u8 *)Result.Memory + Result.Pitch;
++        u32 *SourceRow = (u32 *)charBitmap->data + (MinY*MaxWidth);
++        for(s32 Y = MinY;
++            Y <= MaxY;
++            ++Y)
++        {
++            u32 *Source = (u32 *)SourceRow + MinX;
++            u32 *Dest = (u32 *)DestRow + 1;
++            for(s32 X = MinX;
++                X <= MaxX;
++                ++X)
++            {
++#if 1
++                u32 Pixel = charBitmap->f.get_pixel(charBitmap, X, Y);
++                Assert(Pixel == *Source);
++#else
++                u32 Pixel = *Source;
++#endif
++                u8 Gray = (u8)(Pixel & 0xFF);
++                u8 Alpha = Gray;
++                *Dest++ = ((Alpha << 24) |
++                           (Gray << 16) |
++                           (Gray <<  8) |
++                           (Gray <<  0));
++
++                ++Source;
++            }
++        
++            DestRow += Result.Pitch;
++            SourceRow += MaxWidth;
++        }
++    }
++
+ #else
+ 
+     entire_file TTFFile = ReadEntireFile(FileName);
+@@ -903,7 +1122,7 @@ WriteNonHero(void)
+         ++Character)
+     {
+ //        AddCharacterAsset(Assets, "c:/Windows/Fonts/arial.ttf", "Arial", Character);
+-        AddCharacterAsset(Assets, "c:/Windows/Fonts/cour.ttf", "Courier New", Character);
++        AddCharacterAsset(Assets, "/usr/share/wine/fonts/cour.ttf", "Courier New", Character);
+         AddTag(Assets, Tag_UnicodeCodepoint, (r32)Character);
+     }
+     EndAssetType(Assets);

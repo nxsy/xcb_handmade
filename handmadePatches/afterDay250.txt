@@ -1,0 +1,266 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 3ff20d2..2340e8e 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -299,7 +299,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+     if(Flags & DEBUGVarToText_AddDebugUI)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "#define DEBUGUI_");
+     }
+ 
+@@ -320,7 +320,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+             }
+         }
+         
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "%s%s ", UseName, (Flags & DEBUGVarToText_Colon) ? ":" : "");
+     }
+     
+@@ -330,7 +330,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+         {
+             case DebugType_r32:                
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%f", Event->Value_r32);
+                 if(Flags & DEBUGVarToText_FloatSuffix)
+                 {
+@@ -342,46 +342,46 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+             {
+                 if(Flags & DEBUGVarToText_PrettyBools)
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%s",
+                         Event->Value_b32 ? "true" : "false");
+                 }
+                 else
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%d", Event->Value_b32);
+                 }
+             } break;
+ 
+             case DebugType_s32:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%d", Event->Value_s32);
+             } break;
+ 
+             case DebugType_u32:   
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%u", Event->Value_u32);
+             } break;
+ 
+             case DebugType_v2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V2(%f, %f)",
+                     Event->Value_v2.x, Event->Value_v2.y);
+             } break;
+ 
+             case DebugType_v3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V3(%f, %f, %f)",
+                     Event->Value_v3.x, Event->Value_v3.y, Event->Value_v3.z);
+             } break;
+ 
+             case DebugType_v4:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V4(%f, %f, %f, %f)",
+                     Event->Value_v4.x, Event->Value_v4.y,
+                     Event->Value_v4.z, Event->Value_v4.w);
+@@ -389,7 +389,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             case DebugType_rectangle2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f -> %f, %f)",
+                     Event->Value_rectangle2.Min.x,
+                     Event->Value_rectangle2.Min.y,
+@@ -399,7 +399,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             case DebugType_rectangle3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f, %f -> %f, %f, %f)",
+                     Event->Value_rectangle3.Min.x,
+                     Event->Value_rectangle3.Min.y,
+@@ -417,7 +417,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_event *Event, u32 Flags)
+ 
+             default:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "UNHANDLED: %s", Event->GUID);
+             } break;
+         }
+@@ -527,8 +527,8 @@ DrawProfileIn(debug_state *DebugState, rectangle2 ProfileRect, v2 MouseP)
+             {
+                 debug_event *Record = Region->Event;
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%s: %10ucy [%s(%d)]",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%s: %10lucy [%s(%d)]",
+                             Record->BlockName,
+                             Region->CycleCount,
+                             Record->FileName,
+@@ -1967,27 +1967,27 @@ DEBUGDumpStruct(u32 MemberCount, member_definition *MemberDefs, void *StructPtr,
+             {
+                 case MetaType_u32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %u", Member->Name, *(u32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %u", Member->Name, *(u32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_b32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %u", Member->Name, *(b32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %u", Member->Name, *(b32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_s32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %d", Member->Name, *(s32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %d", Member->Name, *(s32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_r32:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: %f", Member->Name, *(r32 *)MemberPtr);
++                    snprintf(TextBuffer, TextBufferLeft, "%s: %f", Member->Name, *(r32 *)MemberPtr);
+                 } break;
+ 
+                 case MetaType_v2:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: {%f,%f}",
++                    snprintf(TextBuffer, TextBufferLeft, "%s: {%f,%f}",
+                                 Member->Name,
+                                 ((v2 *)MemberPtr)->x,
+                                 ((v2 *)MemberPtr)->y);
+@@ -1995,7 +1995,7 @@ DEBUGDumpStruct(u32 MemberCount, member_definition *MemberDefs, void *StructPtr,
+ 
+                 case MetaType_v3:
+                 {
+-                    _snprintf_s(TextBuffer, TextBufferLeft, TextBufferLeft, "%s: {%f,%f,%f}",
++                    snprintf(TextBuffer, TextBufferLeft, "%s: {%f,%f,%f}",
+                                 Member->Name,
+                                 ((v3 *)MemberPtr)->x,
+                                 ((v3 *)MemberPtr)->y,
+@@ -2082,8 +2082,8 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+ 
+ #if 1
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%32s(%4d): %10ucy %8uh %10ucy/h",
++                snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%32s(%4d): %10lucy %8uh %10ucy/h",
+                             Counter->BlockName,
+                             Counter->LineNumber,
+                             (u32)CycleCount.Avg,
+@@ -2098,12 +2098,12 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+         if(DebugState->MostRecentFrame)
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Last frame time: %.02fms",
+                         DebugState->MostRecentFrame->WallSecondsElapsed * 1000.0f);
+             DEBUGTextLine(TextBuffer);
+ 
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Per-frame arena space remaining: %ukb",
+                         (u32)(GetArenaSizeRemaining(&DebugState->PerFrameArena, AlignNoClear(1)) / 1024));
+             DEBUGTextLine(TextBuffer);
+diff --git a/code/handmade_debug_interface.h b/code/handmade_debug_interface.h
+index c0bb044..20efe76 100644
+--- a/code/handmade_debug_interface.h
++++ b/code/handmade_debug_interface.h
+@@ -109,7 +109,44 @@ u64 ArrayIndex_EventIndex = AtomicAddU64(&GlobalDebugTable->EventArrayIndex_Even
+ #define TIMED_BLOCK__(GUID, Number, ...) timed_block TimedBlock_##Number(GUID, ## __VA_ARGS__)
+ #define TIMED_BLOCK_(GUID, Number, ...) TIMED_BLOCK__(GUID, Number, ## __VA_ARGS__)
+ #define TIMED_BLOCK(Name, ...) TIMED_BLOCK_(DEBUG_NAME(Name), __COUNTER__, ## __VA_ARGS__)
+-#define TIMED_FUNCTION(...) TIMED_BLOCK_(DEBUG_NAME(__FUNCTION__), ## __VA_ARGS__)
++
++// NOTE: brute force work around because gcc defines __FUNCTION__ as a
++// variable instead of just treating __FUNCTION__ as a macro style
++// string replace
++internal char *
++JoinStrings(char *String1, char *String2)
++{
++    u32 String1Length = 0;
++    u32 String2Length = 0;
++    char *S = 0;
++    for(S = String1; *S != 0; ++S)
++    {
++        ++String1Length;
++    }
++    for(S = String2; *S != 0; ++S)
++    {
++        ++String2Length;
++    }
++    
++    char *Result = (char *)malloc(String1Length + String2Length + 1);
++
++    char *R = Result;
++    char *C = 0;
++    for(char *C = String1; *C != 0; ++C)
++    {
++        *R = *C;
++        ++R;
++    }
++    for(C = String2; *C != 0; ++C)
++    {
++        *R = *C;
++        ++R;
++    }
++    *R = 0;
++
++    return Result;
++}
++#define TIMED_FUNCTION(...) TIMED_BLOCK_(JoinStrings((char *)DEBUG_NAME(""), (char *)__FUNCTION__), __COUNTER__, ## __VA_ARGS__)
+ 
+ #define BEGIN_BLOCK_(GUID) {RecordDebugEvent(DebugType_BeginBlock, GUID);}
+ #define END_BLOCK_(GUID) {RecordDebugEvent(DebugType_EndBlock, GUID);}
+diff --git a/code/handmade_opengl.cpp b/code/handmade_opengl.cpp
+index 5ca0f2f..bd0a5ea 100644
+--- a/code/handmade_opengl.cpp
++++ b/code/handmade_opengl.cpp
+@@ -234,7 +234,9 @@ OpenGLRenderCommands(game_render_commands *Commands, s32 WindowWidth, s32 Window
+                 v2 MaxP = MinP + Entry->Size.x*XAxis + Entry->Size.y*YAxis;
+ 
+                 // TODO(casey): Hold the frame if we are not ready with the texture?
+-                glBindTexture(GL_TEXTURE_2D, (GLuint)Entry->Bitmap->TextureHandle);
++                // NOTE: temporary variable to stop compiler complaining
++                size_t temp = (size_t)Entry->Bitmap->TextureHandle;
++                glBindTexture(GL_TEXTURE_2D, (GLuint)temp);
+                 OpenGLRectangle(Entry->P, MaxP, Entry->Color);
+             } break;
+ 
+@@ -282,6 +284,8 @@ PLATFORM_ALLOCATE_TEXTURE(Win32AllocateTexture)
+ 
+ PLATFORM_DEALLOCATE_TEXTURE(Win32DeallocateTexture) 
+ {
+-    GLuint Handle = (GLuint)Texture;
++    // NOTE: temporary variable to stop compiler complaining
++    size_t temp = (size_t)Texture;
++    GLuint Handle = (GLuint)temp;
+     glDeleteTextures(1, &Handle);
+ }

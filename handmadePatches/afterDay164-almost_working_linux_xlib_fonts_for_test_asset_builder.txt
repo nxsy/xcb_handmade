@@ -1,0 +1,134 @@
+diff --git a/code/test_asset_builder.cpp b/code/test_asset_builder.cpp
+index da95273..ffc70d9 100644
+--- a/code/test_asset_builder.cpp
++++ b/code/test_asset_builder.cpp
+@@ -8,10 +8,14 @@
+ 
+ #include "test_asset_builder.h"
+ 
+-#define USE_FONTS_FROM_WINDOWS 1
++#define USE_FONTS_FROM_WINDOWS 0
++#define USE_FONTS_FROM_XWINDOWS 1
+ 
+ #if USE_FONTS_FROM_WINDOWS
+ #include <windows.h>
++#elif USE_FONTS_FROM_XWINDOWS
++#include <X11/Xlib.h>
++#include <unistd.h>
+ #else
+ #define STB_TRUETYPE_IMPLEMENTATION
+ #include "stb_truetype.h"
+@@ -328,6 +332,104 @@ LoadGlyphBitmap(char *FileName, char *FontName, u32 Codepoint)
+         }
+     }
+ 
++#elif USE_FONTS_FROM_XWINDOWS
++
++	Display *display = XOpenDisplay(0);
++
++	u32 screen = XDefaultScreen(display);
++
++	u32 depth = XDefaultDepth(display, screen);
++	
++	Pixmap pixmap = XCreatePixmap(display, screen, 1024, 1024, depth);
++	
++//	u32 mask = GCForeground | GCBackground | GCFont;
++//	XGCValues values = {}
++
++	GC graphicsContext = XDefaultGC(display, screen);
++
++	char cheesePoint = (char)Codepoint;
++
++	XDrawString(display, pixmap, graphicsContext, 0, 0, &cheesePoint, 1);
++
++	XImage *charBitmap = XGetImage(display, pixmap, 0, 0, 1024, 1024, plane_mask, format);
++
++	s32 MinX = 10000;
++    s32 MinY = 10000;
++    s32 MaxX = -10000;
++    s32 MaxY = -10000;
++    for(s32 Y = 0;
++        Y < Height;
++        ++Y)
++    {
++        for(s32 X = 0;
++            X < Width;
++            ++X)
++        {
++            COLORREF Pixel = XGetPixel(charBitMap, X, Y);
++            if(Pixel != 0)
++            {
++                if(MinX > X)
++                {
++                    MinX = X;                    
++                }
++
++                if(MinY > Y)
++                {
++                    MinY = Y;                    
++                }
++                
++                if(MaxX < X)
++                {
++                    MaxX = X;                    
++                }
++
++                if(MaxY < Y)
++                {
++                    MaxY = Y;                    
++                }
++            }
++        }
++	}
++		
++    if(MinX <= MaxX)
++    {
++        --MinX;
++        --MinY;
++        ++MaxX;
++        ++MaxY;
++        
++        Width = (MaxX - MinX) + 1;
++        Height = (MaxY - MinY) + 1;
++        
++        Result.Width = Width;
++        Result.Height = Height;
++        Result.Pitch = Result.Width*BITMAP_BYTES_PER_PIXEL;
++        Result.Memory = malloc(Height*Result.Pitch);
++        Result.Free = Result.Memory;
++
++        u8 *DestRow = (u8 *)Result.Memory + (Height - 1)*Result.Pitch;
++        for(s32 Y = MinY;
++            Y <= MaxY;
++            ++Y)
++        {
++            u32 *Dest = (u32 *)DestRow;
++            for(s32 X = MinX;
++                X <= MaxX;
++                ++X)
++            {
++                COLORREF Pixel = GetPixel(DeviceContext, X, Y);
++                u8 Gray = (u8)(Pixel & 0xFF);
++                u8 Alpha = 0xFF;
++                *Dest++ = ((Alpha << 24) |
++                           (Gray << 16) |
++                           (Gray <<  8) |
++                           (Gray <<  0));
++            }
++        
++            DestRow -= Result.Pitch;
++        }
++    }
++	
+ #else
+ 
+     entire_file TTFFile = ReadEntireFile(FileName);
+@@ -854,7 +956,7 @@ WriteNonHero(void)
+         ++Character)
+     {
+ //        AddCharacterAsset(Assets, "c:/Windows/Fonts/arial.ttf", "Arial", Character);
+-        AddCharacterAsset(Assets, "c:/Windows/Fonts/cour.ttf", "Courier New", Character);
++        AddCharacterAsset(Assets, "/usr/share/wine/fonts/cour.ttf", "Courier New", Character);
+         AddTag(Assets, Tag_UnicodeCodepoint, (r32)Character);
+     }
+     EndAssetType(Assets);

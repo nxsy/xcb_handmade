@@ -1,0 +1,74 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index bb2b029..9cedd4d 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -253,7 +253,7 @@ DEBUGOverlay(game_memory *Memory)
+ 
+ #if 1
+                     char TextBuffer[256];
+-                    _snprintf_s(TextBuffer, sizeof(TextBuffer),
++                    snprintf(TextBuffer, sizeof(TextBuffer),
+                                 "%32s(%4d): %10ucy %8uh %10ucy/h",
+                                 Counter->FunctionName,
+                                 Counter->LineNumber,
+@@ -326,9 +326,9 @@ DEBUGOverlay(game_memory *Memory)
+ 
+ debug_record DebugRecordArray[__COUNTER__];
+ 
+-extern u32 GlobalCurrentEventArrayIndex = 0;
++u32 GlobalCurrentEventArrayIndex = 0;
+ extern u32 const DebugRecords_Optimized_Count;
+-debug_record DebugRecords_Optimized[];
++extern debug_record DebugRecords_Optimized[];
+ 
+ internal void
+ UpdateDebugRecords(debug_state *DebugState, u32 CounterCount, debug_record *Counters)
+diff --git a/code/handmade_debug.h b/code/handmade_debug.h
+index 6f17cd4..2bb9350 100644
+--- a/code/handmade_debug.h
++++ b/code/handmade_debug.h
+@@ -7,9 +7,9 @@
+    $Notice: (C) Copyright 2015 by Molly Rocket, Inc. All Rights Reserved. $
+    ======================================================================== */
+ 
+-#define TIMED_BLOCK__(Number, ...) timed_block TimedBlock_##Number(__COUNTER__, __FILE__, __LINE__, __FUNCTION__, ## __VA_ARGS__)
++#define TIMED_BLOCK__(Number, ...) timed_block TimedBlock_##Number(__COUNTER__, (char *)__FILE__, __LINE__, (char *)__FUNCTION__, ## __VA_ARGS__)
+ #define TIMED_BLOCK_(Number, ...) TIMED_BLOCK__(Number, ## __VA_ARGS__)
+-#define TIMED_BLOCK(...) TIMED_BLOCK_(__LINE__, ## __VA_ARGS__)
++#define TIMED_BLOCK(...) TIMED_BLOCK_(__LINE__) //, ## __VA_ARGS__)
+ 
+ struct debug_record
+ {
+@@ -37,7 +37,7 @@ struct debug_event
+     u8 Type;
+ };
+ 
+-debug_record DebugRecordArray[];
++extern debug_record DebugRecordArray[];
+ 
+ #define MAX_DEBUG_EVENT_COUNT (16*65536)
+ extern u64 Global_DebugEventArrayIndex_DebugEventIndex;
+diff --git a/code/handmade_intrinsics.h b/code/handmade_intrinsics.h
+index fc2f913..cc41dbf 100644
+--- a/code/handmade_intrinsics.h
++++ b/code/handmade_intrinsics.h
+@@ -46,6 +46,19 @@ inline uint32 AtomicCompareExchangeUInt32(uint32 volatile *Value, uint32 New, ui
+ 
+     return(Result);
+ }
++inline u64 AtomicExchangeU64(u64 volatile *Value, u64 New)
++{
++    u64 Result = __sync_lock_test_and_set((u64 *)Value, New);
++
++    return(Result);
++}
++inline u64 AtomicAddU64(u64 volatile *Value, u64 Addend)
++{
++    // NOTE(casey): Returns the original value _prior_ to adding
++    u64 Result = __sync_fetch_and_add((u64 *)Value, Addend);
++
++    return(Result);
++}
+ #else
+ // TODO(casey): Other compilers/platforms??
+ #endif

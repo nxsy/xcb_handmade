@@ -657,7 +657,7 @@ location_greater(world_position i, world_position j)
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     game_state *state = (game_state *)Memory->PermanentStorage;
-    if(!Memory->IsInitialized)
+    if(!state->IsInitialized)
     {
         HHXCB_ASSERT(sizeof(tilemap_position) == 4);
         HHXCB_ASSERT(sizeof(world_position) == 16);
@@ -689,7 +689,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->tilemap.tile_set.width = 64;
         state->tilemap.tile_set.height = 64;
 
-        Memory->IsInitialized = true;
+        state->IsInitialized = true;
 
         {
 
@@ -812,7 +812,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
         if(Controller->ActionUp.EndedDown)
         {
-            Memory->IsInitialized = false;
+            state->IsInitialized = false;
             printf("Set memory to be reinitialized on next frame\n");
         }
         if(Controller->ActionRight.EndedDown)

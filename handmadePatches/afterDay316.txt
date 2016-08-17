@@ -1,0 +1,327 @@
+diff --git a/code/handmade_debug.cpp b/code/handmade_debug.cpp
+index 3220d4c..d251d74 100644
+--- a/code/handmade_debug.cpp
++++ b/code/handmade_debug.cpp
+@@ -207,7 +207,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+ 
+     if(Flags & DEBUGVarToText_AddDebugUI)
+     {
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "#define DEBUGUI_");
+     }
+ 
+@@ -228,7 +228,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+             }
+         }
+ 
+-        At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++        At += snprintf(At, (size_t)(End - At),
+                           "%s%s ", UseName, (Flags & DEBUGVarToText_Colon) ? ":" : "");
+     }
+ 
+@@ -238,7 +238,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+         {
+             case DebugType_r32:                
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%f", Event->Value_r32);
+                 if(Flags & DEBUGVarToText_FloatSuffix)
+                 {
+@@ -250,46 +250,46 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+             {
+                 if(Flags & DEBUGVarToText_PrettyBools)
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%s",
+                         Event->Value_b32 ? "true" : "false");
+                 }
+                 else
+                 {
+-                    At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                    At += snprintf(At, (size_t)(End - At),
+                         "%d", Event->Value_b32);
+                 }
+             } break;
+ 
+             case DebugType_s32:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%d", Event->Value_s32);
+             } break;
+ 
+             case DebugType_u32:   
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "%u", Event->Value_u32);
+             } break;
+ 
+             case DebugType_v2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V2(%f, %f)",
+                     Event->Value_v2.x, Event->Value_v2.y);
+             } break;
+ 
+             case DebugType_v3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V3(%f, %f, %f)",
+                     Event->Value_v3.x, Event->Value_v3.y, Event->Value_v3.z);
+             } break;
+ 
+             case DebugType_v4:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "V4(%f, %f, %f, %f)",
+                     Event->Value_v4.x, Event->Value_v4.y,
+                     Event->Value_v4.z, Event->Value_v4.w);
+@@ -297,7 +297,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+ 
+             case DebugType_rectangle2:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f -> %f, %f)",
+                     Event->Value_rectangle2.Min.x,
+                     Event->Value_rectangle2.Min.y,
+@@ -307,7 +307,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+ 
+             case DebugType_rectangle3:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "Rect2(%f, %f, %f -> %f, %f, %f)",
+                     Event->Value_rectangle3.Min.x,
+                     Event->Value_rectangle3.Min.y,
+@@ -323,7 +323,7 @@ DEBUGEventToText(char *Buffer, char *End, debug_element *Element, debug_event *E
+ 
+             default:
+             {
+-                At += _snprintf_s(At, (size_t)(End - At), (size_t)(End - At),
++                At += snprintf(At, (size_t)(End - At),
+                     "UNHANDLED: %s", Event->GUID);
+             } break;
+         }
+@@ -542,8 +542,8 @@ DrawProfileBars(debug_state *DebugState, debug_id GraphID, rectangle2 ProfileRec
+         if(IsInRectangle(RegionRect, MouseP))
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                "%s: %10ucy",
++            snprintf(TextBuffer, sizeof(TextBuffer),
++                "%s: %10lucy",
+                 Element->GUID, Node->Duration);
+             AddTooltip(DebugState, TextBuffer);
+             
+@@ -676,8 +676,8 @@ DrawFrameBars(debug_state *DebugState, debug_id GraphID, rectangle2 ProfileRect,
+                     if(IsInRectangle(RegionRect, MouseP))
+                     {
+                         char TextBuffer[256];
+-                        _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                            "%s: %10ucy",
++                        snprintf(TextBuffer, sizeof(TextBuffer),
++                            "%s: %10lucy",
+                             Element->GUID, Node->Duration);
+                         AddTooltip(DebugState, TextBuffer);
+                         
+@@ -768,8 +768,8 @@ DrawTopClocksList(debug_state *DebugState, debug_id GraphID, rectangle2 ProfileR
+         RunningSum += Stats->Sum;
+         
+         char TextBuffer[256];
+-        _snprintf_s(TextBuffer, sizeof(TextBuffer),
+-                    "%10ucy %02.02f%% %4d %s",
++        snprintf(TextBuffer, sizeof(TextBuffer),
++                    "%10lucy %02.02f%% %4d %s",
+                     (u32)Stats->Sum,
+                     (PC*Stats->Sum),
+                     Stats->Count,
+@@ -780,7 +780,7 @@ DrawTopClocksList(debug_state *DebugState, debug_id GraphID, rectangle2 ProfileR
+         if(IsInRectangle(TextRect, MouseP))
+         {
+             char TextBuffer[256];
+-            _snprintf_s(TextBuffer, sizeof(TextBuffer),
++            snprintf(TextBuffer, sizeof(TextBuffer),
+                         "Cumulative to this point: %02.02f%%",
+                         (PC*RunningSum));
+             AddTooltip(DebugState, TextBuffer);
+@@ -856,7 +856,7 @@ DrawFrameSlider(debug_state *DebugState, debug_id SliderID, rectangle2 TotalRect
+             if(IsInRectangle(RegionRect, MouseP))
+             {
+                 char TextBuffer[256];
+-                _snprintf_s(TextBuffer, sizeof(TextBuffer), "%u", FrameIndex);
++                snprintf(TextBuffer, sizeof(TextBuffer), "%u", FrameIndex);
+                 AddTooltip(DebugState, TextBuffer);
+                 
+                 DebugState->NextHotInteraction = 
+@@ -1055,7 +1055,7 @@ DEBUGDrawElement(layout *Layout, debug_tree *Tree, debug_element *Element, debug
+             char Text[256];
+             
+             debug_frame *MostRecentFrame = DebugState->Frames + DebugState->ViewingFrameOrdinal;
+-            _snprintf_s(Text, sizeof(Text),
++            snprintf(Text, sizeof(Text),
+                 "Viewing frame time: %.02fms %de %dp %dd",
+                 MostRecentFrame->WallSecondsElapsed * 1000.0f,
+                 MostRecentFrame->StoredEventCount,
+@@ -1068,7 +1068,7 @@ DEBUGDrawElement(layout *Layout, debug_tree *Tree, debug_element *Element, debug
+         case DebugType_DebugMemoryInfo:
+         {
+             char Text[256];
+-            _snprintf_s(Text, sizeof(Text),
++            snprintf(Text, sizeof(Text),
+                 "Per-frame arena space remaining: %ukb",
+                 (u32)(GetArenaSizeRemaining(&DebugState->PerFrameArena, AlignNoClear(1)) / 1024));
+ 
+@@ -2074,7 +2074,7 @@ DEBUGEnd(debug_state *DebugState, game_input *Input)
+     debug_event *HotEvent = 0;
+ 
+     debug_frame *MostRecentFrame = DebugState->Frames + DebugState->ViewingFrameOrdinal;
+-    _snprintf_s(DebugState->RootInfo, DebugState->RootInfoSize, DebugState->RootInfoSize,
++    snprintf(DebugState->RootInfo, DebugState->RootInfoSize,
+                 "%.02fms %de %dp %dd",
+                 MostRecentFrame->WallSecondsElapsed * 1000.0f,
+                 MostRecentFrame->StoredEventCount,
+diff --git a/code/handmade_debug_interface.h b/code/handmade_debug_interface.h
+index 9b2b83f..9be8ddb 100644
+--- a/code/handmade_debug_interface.h
++++ b/code/handmade_debug_interface.h
+@@ -82,6 +82,9 @@ struct debug_event
+     };
+ };
+ 
++
++#define MAX_STRING_LENGTH 256
++#define NUM_OF_STRINGS 2048
+ struct debug_table
+ {
+     debug_event EditEvent;
+@@ -95,6 +98,13 @@ struct debug_table
+     // only need 1 bit to store which array we're using...
+     u64 volatile EventArrayIndex_EventIndex;
+     debug_event Events[2][16*65536];
++
++    // NOTE: need to store the concatenated strings, used in
++    // the TIMED_FUNCTION macro, so the debug collatation will be able to
++    // reference them at the end of the frame    
++    u32 maxStringSize = MAX_STRING_LENGTH;
++    u32 numOfStrings = NUM_OF_STRINGS;
++    char strings[NUM_OF_STRINGS][MAX_STRING_LENGTH];
+ };
+ 
+ extern debug_table *GlobalDebugTable;
+@@ -123,8 +133,94 @@ u64 ArrayIndex_EventIndex = AtomicAddU64(&GlobalDebugTable->EventArrayIndex_Even
+ #define TIMED_BLOCK__(GUID, Number, ...) timed_block TimedBlock_##Number(GUID, ## __VA_ARGS__)
+ #define TIMED_BLOCK_(GUID, Number, ...) TIMED_BLOCK__(GUID, Number, ## __VA_ARGS__)
+ #define TIMED_BLOCK(Name, ...) TIMED_BLOCK_(DEBUG_NAME(Name), __COUNTER__, ## __VA_ARGS__)
+-#define TIMED_FUNCTION(...) TIMED_BLOCK_(DEBUG_NAME(__FUNCTION__), ## __VA_ARGS__)
+ 
++// NOTE: brute force work around because gcc defines __FUNCTION__ as a
++// variable instead of just treating __FUNCTION__ as a macro style
++// string replace
++//inline
++void
++JoinStrings(char *String1, char *String2, char *Result)
++{    
++    char *R = Result;
++    char *C = 0;
++    for(C = String1; *C != 0; ++C)
++    {
++        *R = *C;
++        ++R;
++    }
++    for(C = String2; *C != 0; ++C)
++    {
++        *R = *C;
++        ++R;
++    }
++    *R = 0;
++}
++
++inline u32
++StringHash(char *string)
++{
++    u32 result = 0;
++    for(char *C = string; *C != 0; ++C)
++    {
++        result = 65599*result + *C;
++    }
++    return result;
++}
++
++//inline
++void
++CopyString(char *String, char *Result)
++{
++    JoinStrings(String, "", Result);
++}
++
++u32 StringLength(char *String);
++
++// NOTE: check to see if NUM_OF_STRINGS is large enough to have no
++// collisions
++#define TEST_FOR_COLLISIONS 0
++#if TEST_FOR_COLLISIONS
++#include "stdio.h"
++b32 StringsAreEqual(char *A, char *B);
++#endif
++
++internal char *
++StoreName(char *DebugName, char * FunctionName)
++{
++    u32 DebugNameLength = StringLength(DebugName);
++    u32 FunctionNameLength = StringLength(FunctionName);
++    u32 DebugFunctionNameLength = DebugNameLength + FunctionNameLength + 1;
++    char DebugFunctionName[DebugFunctionNameLength] = {};
++    JoinStrings(DebugName, FunctionName, DebugFunctionName);
++    u32 stringBucket = StringHash(DebugFunctionName) % GlobalDebugTable->numOfStrings;
++    char *selectedString = GlobalDebugTable->strings[stringBucket];
++#if TEST_FOR_COLLISIONS
++    char stringCopy[256] = {};
++    if(*selectedString)
++    {
++        CopyString(selectedString, stringCopy);
++    }
++    if(!StringsAreEqual(DebugFunctionName, stringCopy))
++    {
++        printf("mismatch: %s, %s\n", DebugFunctionName, stringCopy);
++    }
++#endif
++    // NOTE: if there is a hash collision, we just use the
++    // previously stored string. because it is probably too expensive
++    // to compare strings for each TIMED_FUNCTION call, maybe it isn't,
++    // I couldn't see much difference in the game, with and without
++    // string compares at every TIMED_FUNCTION call
++    if(*selectedString == 0)
++    {
++        Assert(DebugFunctionNameLength < GlobalDebugTable->maxStringSize);
++        CopyString(DebugFunctionName, selectedString);
++    }
++    return selectedString;
++}
++#define TIMED_FUNCTION(...) char *DebugName = DEBUG_NAME(""); \
++    char *storedName = StoreName(DebugName, (char *)__FUNCTION__);   \
++    TIMED_BLOCK_(storedName, __COUNTER__, ## __VA_ARGS__)
++    
+ #define BEGIN_BLOCK_(GUID) {RecordDebugEvent(DebugType_BeginBlock, GUID);}
+ #define END_BLOCK_(GUID) {RecordDebugEvent(DebugType_EndBlock, GUID);}
+ 
+@@ -231,9 +327,10 @@ internal void DEBUGEditEventData(char *GUID, debug_event *Event);
+      } 
+ #define DEBUG_NAMED_VALUE(Value)  \
+ { \
+-    RecordDebugEvent(DebugType_Unknown, __FUNCTION__ #Value);                              \
++    char *storedName = StoreName((char *)__FUNCTION__, #Value);   \
++    RecordDebugEvent(DebugType_Unknown, storedName); \
+     DEBUGValueSetEventData(Event, Value, (void *)&(Value)); \
+-} 
++}
+ 
+ #define DEBUG_B32(Value)  \
+ { \

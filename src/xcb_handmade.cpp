@@ -1389,7 +1389,7 @@ hhxcbDisplayBufferInWindow(hhxcb_context *context,
 	else
 	{
         BEGIN_BLOCK("OpenGLRenderCommands");
-		OpenGLRenderCommands(Commands, &Prep, DrawRegion);
+		OpenGLRenderCommands(Commands, &Prep, DrawRegion, GlobalWindowWidth, GlobalWindowHeight);
         END_BLOCK();
         
         BEGIN_BLOCK("SwapBuffers");
@@ -2041,22 +2041,29 @@ main()
             buffer.height);
         
         // NOTE: XGetGeometry does not seem to get the right values. It just
-        // seems to return the initially set values.
+        // seems to return the initially set values. This seems to be due
+        // to xcb resize/move function (run by the window manager) not
+        // setting the values after a resize
 		//hhxcb_window_dimension dimension = hhxcbGetWindowDimension(&context);
         //printf("x: %d   y: %d   w: %d  h: %d\n", dimension.x, dimension.y, dimension.width, dimension.height);
 
+        // NOTE: xcb equivalent function doesn't get the right values either
+        //xcb_get_geometry_cookie_t cook = xcb_get_geometry(context.connection, context.window);
+        //xcb_get_geometry_reply_t *rep = xcb_get_geometry_reply(context.connection, cook, 0);
+        //printf("x: %d   y: %d   w: %d  h: %d\n", rep->x, rep->y, rep->width, rep->height);
+        
         rectangle2i DrawRegion = AspectRatioFit(
             RenderCommands.Width, RenderCommands.Height,
             GlobalWindowWidth, GlobalWindowHeight);
-
-        // NOTE: modifying DrawRegion Y values for strange x11/glviewport
-        // behavior, it seems like glViewport takes x11's convention of
-        // positioning Y from the top, with down positive to the top of
-        // the viewport being displayed (even though in the docs it says it
-        // measures from the bottom left corner of the window to the bottom
-        // left corner of the viewport)
-        DrawRegion.MinY += buffer.height - GlobalWindowHeight;
-        DrawRegion.MaxY += buffer.height - GlobalWindowHeight;
+        
+        // NOTE: fixup to get opengl to draw in the right place. I think
+        // this is due to an xcb bug where the window size
+        // isn't updated when the window is resized. So opengl will use 
+        // the initially set lower left corner of the window as it's
+        // reference point, even when the window is resized and that point
+        // is no longer the lower left corner of the window
+        DrawRegion.MinY += START_HEIGHT - GlobalWindowHeight;
+        DrawRegion.MaxY += START_HEIGHT - GlobalWindowHeight;
         
         new_input->dtForFrame = target_nanoseconds_per_frame / (1000.0 * 1000.0 * 1000.0);
         
